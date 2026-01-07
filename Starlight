@@ -1524,35 +1524,27 @@ local function Hide(Interface, JustHide: boolean?, Notify: boolean?, Bind: strin
 		end
 	end
 	
-	-- hide popups - PATCHED: removed virtual input to fix lag
-	pcall(function()
-		if Starlight.Instance then
-			local popupOverlay = Starlight.Instance:FindFirstChild("PopupOverlay")
-			if popupOverlay then
-				for _, popup in pairs(popupOverlay:GetChildren()) do
-					if popup:IsA("GuiObject") then
-						popup.Visible = false
-					end
-				end
-			end
-		end
-		if mainWindow then
-			local modalOverlay = mainWindow:FindFirstChild("Popup Overlay")
-			if modalOverlay then
-				modalOverlay.Visible = false
-			end
-		end
-	end)
+	-- hide popups
+	if not isStudio and Starlight.Instance.MobileToggle.Visible then
+		InputManager:SendTouchEvent(
+			0, 0, 0, 0
+		)
+
+		InputManager:SendTouchEvent(
+			0, 2, 0, 0
+		)
+	elseif not isStudio then
+		InputManager:SendMouseButtonEvent(
+			0, 0, 0, true, game, 0
+		)
+
+		InputManager:SendMouseButtonEvent(
+			0, 0, 0, false, game, 0
+		)
+	end
+
 
 	task.wait(0.18)
-	
-	-- PATCHED: Disable Active to fix shift lock
-	if mainWindow then
-		pcall(function()
-			mainWindow.Active = false
-		end)
-	end
-	
 	if Interface.ClassName == "ScreenGui" then
 		Interface.Enabled = false
 	else
@@ -1586,13 +1578,6 @@ local function Unhide(Interface)
 		Interface.Enabled = true
 	else
 		Interface.Visible = true
-	end
-
-	-- PATCHED: Re-enable Active for UI interaction (shift lock fix)
-	if mainWindow then
-		pcall(function()
-			mainWindow.Active = true
-		end)
 	end
 
 	for i, v in pairs(Interface:GetDescendants()) do
