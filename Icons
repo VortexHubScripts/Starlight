@@ -21,7 +21,7 @@ module.nebulaIcons = {
 	home_material = 9080449299,
 	location = 6034996695,
 	sparkle = 4483362748,
-  bishop = 16293438731,
+  	bishop = 16293438710,
 }
 
 function module:GetIcon(name, source)
