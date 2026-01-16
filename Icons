@@ -35,3 +35,204 @@ function module:GetIcon(name, source)
 end
 
 return module
+
+-- OTHER ICONS
+--[[
+
+-- Interface & Navigation
+"home"
+"menu"
+"settings"
+"search"
+"filter"
+"grid"
+"list"
+"layout"
+"sidebar"
+"panels"
+
+-- Actions
+"play"
+"pause"
+"stop"
+"skip-forward"
+"skip-back"
+"refresh-cw" (refresh clockwise)
+"rotate-cw"
+"repeat"
+"shuffle"
+"upload"
+"download"
+"save"
+"trash"
+"edit"
+"copy"
+"clipboard"
+
+-- Arrows & Navigation
+"arrow-right"
+"arrow-left"
+"arrow-up"
+"arrow-down"
+"chevron-right"
+"chevron-left"
+"chevron-up"
+"chevron-down"
+"navigation"
+"compass"
+"map-pin"
+"target"
+
+-- User & People
+"user"
+"users"
+"user-plus"
+"user-minus"
+"user-check"
+"user-x"
+"shield"
+"crown"
+
+-- Communication
+"message-circle"
+"message-square"
+"mail"
+"bell"
+"phone"
+"video"
+
+-- Media & Files
+"image"
+"file"
+"file-text"
+"folder"
+"folder-open"
+"camera"
+"video"
+"music"
+
+-- Status & Indicators
+"check"
+"check-circle"
+"x"
+"x-circle"
+"alert-circle"
+"alert-triangle"
+"info"
+"help-circle"
+"eye"
+"eye-off"
+"lock"
+"unlock"
+"star"
+"heart"
+
+-- Tools & Objects
+"wrench"
+"tool"
+"sliders"
+"toggle-left"
+"toggle-right"
+"package"
+"box"
+"gift"
+"trophy"
+"award"
+"flag"
+"bookmark"
+
+-- Technology
+"cpu"
+"hard-drive"
+"wifi"
+"bluetooth"
+"battery"
+"power"
+"zap"
+"activity"
+"monitor"
+"smartphone"
+"tablet"
+
+-- Nature & Weather
+"sun"
+"moon"
+"cloud"
+"cloud-rain"
+"snowflake"
+"wind"
+"droplet"
+"flame"
+"tree"
+
+-- Shapes & Design
+"circle"
+"square"
+"triangle"
+"hexagon"
+"sparkles"
+"sparkle"
+"palette"
+"paint-bucket"
+"pen-tool"
+
+-- Gaming Specific
+"gamepad"
+"gamepad-2"
+"joystick"
+"sword"
+"shield"
+"crosshair"
+"target"
+"map"
+"trophy"
+"gem"
+"coins"
+
+-- Text & Input
+"text-cursor-input"
+"type"
+"bold"
+"italic"
+"underline"
+"align-left"
+"align-center"
+"align-right"
+
+-- Time
+"clock"
+"calendar"
+"timer"
+"hourglass"
+"history"
+
+-- Math & Data
+"plus"
+"minus"
+"divide"
+"percent"
+"hash"
+"bar-chart"
+"pie-chart"
+"trending-up"
+"trending-down"
+
+-- Movement & Direction
+"move"
+"maximize"
+"minimize"
+"zoom-in"
+"zoom-out"
+"expand"
+"shrink"
+
+-- Special
+"bot" (robot/AI)
+"scan"
+"qr-code"
+"fingerprint"
+"key"
+"link"
+"anchor"
+
+]]
