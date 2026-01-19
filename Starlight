@@ -2386,7 +2386,6 @@ function Starlight:CreateWindow(WindowSettings)
 		)
 
 		mainWindow.ModalOverlay.Visible = false
-		mainWindow.ModalOverlay.Active = false
 		--[[mainWindow["Loading Screen"].Version.Text = WindowSettings.LoadingSettings.Title == "Starlight Interface Suite" and Release or "Starlight Interface Suite " .. Release
 		mainWindow["Loading Screen"].Frame.SubFrame.Title.Text = WindowSettings.LoadingSettings.Title or ""
 		mainWindow["Loading Screen"].Frame.SubFrame.Subtitle.Text = WindowSettings.LoadingSettings.Subtitle or ""]]
@@ -2788,7 +2787,6 @@ function Starlight:CreateWindow(WindowSettings)
 			end)
 			task.wait(0.18)
 			mainWindow.ModalOverlay.Visible = false
-			mainWindow.ModalOverlay.Active = false
 			mainWindow.Content.Interactable = true
 			if x then
 				x()
@@ -3463,12 +3461,16 @@ function Starlight:CreateWindow(WindowSettings)
 			end
 
 			if Starlight.Window.CurrentTab == nil then
-				--task.spawn(function()
 				repeat
 					task.wait()
 				until Tab.Instances.Page.Parent == tabs
 				Activate()
-				--end)
+			elseif #tabs:GetChildren() == 2 then -- Only Template + this tab exists
+				-- This is the first real tab, activate it
+				repeat
+					task.wait()
+				until Tab.Instances.Page.Parent == tabs
+				Activate()
 			end
 
 			Tab.Instances.Button.Interact["MouseButton1Click"]:Connect(Activate)
@@ -3626,12 +3628,16 @@ function Starlight:CreateWindow(WindowSettings)
 			end
 
 			if Starlight.Window.CurrentTab == nil then
-				--task.spawn(function()
 				repeat
 					task.wait()
 				until Tab.Instances.Page.Parent == tabs
 				Activate()
-				--end)
+			elseif #tabs:GetChildren() == 2 then -- Only Template + this tab exists
+				-- This is the first real tab, activate it
+				repeat
+					task.wait()
+				until Tab.Instances.Page.Parent == tabs
+				Activate()
 			end
 
 			Tab.Instances.Button.Interact["MouseButton1Click"]:Connect(Activate)
