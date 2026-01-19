@@ -2788,6 +2788,7 @@ function Starlight:CreateWindow(WindowSettings)
 			end)
 			task.wait(0.18)
 			mainWindow.ModalOverlay.Visible = false
+			mainWindow.ModalOverlay.Active = false
 			mainWindow.Content.Interactable = true
 			if x then
 				x()
