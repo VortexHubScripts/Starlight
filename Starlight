@@ -2386,6 +2386,7 @@ function Starlight:CreateWindow(WindowSettings)
 		)
 
 		mainWindow.ModalOverlay.Visible = false
+		mainWindow.ModalOverlay.Active = false
 		--[[mainWindow["Loading Screen"].Version.Text = WindowSettings.LoadingSettings.Title == "Starlight Interface Suite" and Release or "Starlight Interface Suite " .. Release
 		mainWindow["Loading Screen"].Frame.SubFrame.Title.Text = WindowSettings.LoadingSettings.Title or ""
 		mainWindow["Loading Screen"].Frame.SubFrame.Subtitle.Text = WindowSettings.LoadingSettings.Subtitle or ""]]
