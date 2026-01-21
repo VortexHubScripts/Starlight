@@ -6969,13 +6969,13 @@ function Starlight:CreateWindow(WindowSettings)
 								NestedElement.Instances[2].Buttons.Visible = false
 
 								Tween(NestedElement.Instances[2], { Size = UDim2.fromOffset(0, 0) }, function()
-									if NestedElement and NestedElement.Instances ~= nil then
-										NestedElement.Instances[2].Visible = false
-										if acrylicFlag then
-											AcrylicObject.Model.Transparency = 1
-										end
-									end
-								end, Tween.Info(nil, nil, 0.24))
+                                	if NestedElement and NestedElement.Instances ~= nil then
+                                		NestedElement.Instances[2].Visible = false
+                                		if acrylicFlag and AcrylicObject and AcrylicObject.Model then
+                                			AcrylicObject.Model.Transparency = 1
+                                		end
+                                	end
+                                end, Tween.Info(nil, nil, 0.24))
 
 								NestedElement.Instances[2].Container.Color.OldColor.Frame.BackgroundColor3 =
 									NestedElement.Values.CurrentValue
@@ -7121,7 +7121,7 @@ function Starlight:CreateWindow(WindowSettings)
                             	if not NestedElement.Instances[2].Container then
                             		return
                             	end
-                            
+
 								local oldValue = Color3.fromRGB(
 									tonumber(
 										NestedElement.Instances[2].Container.Values.HexRGB.Red.PART_Backdrop.PART_Input.Text
@@ -7946,18 +7946,18 @@ function Starlight:CreateWindow(WindowSettings)
 									Tween.Info(nil, nil, 0.18)
 								)
 								Tween(
-									NestedElement.Instances[2],
-									{ Size = UDim2.fromOffset(NestedElement.Instances[2].Size.X.Offset, 0) },
-									function()
-										if NestedElement and NestedElement.Instances ~= nil then
-											NestedElement.Instances[2].Visible = false
-											if acrylicFlag then
-												AcrylicObject.Model.Transparency = 1
-											end
-										end
-									end,
-									Tween.Info(nil, nil, 0.18)
-								)
+                                	NestedElement.Instances[2],
+                                	{ Size = UDim2.fromOffset(NestedElement.Instances[2].Size.X.Offset, 0) },
+                                	function()
+                                		if NestedElement and NestedElement.Instances ~= nil then
+                                			NestedElement.Instances[2].Visible = false
+                                			if acrylicFlag and AcrylicObject and AcrylicObject.Model then
+                                				AcrylicObject.Model.Transparency = 1
+                                			end
+                                		end
+                                	end,
+                                	Tween.Info(nil, nil, 0.18)
+                                )
 							end
 							NestedElement.Instances[1]:GetPropertyChangedSignal("AbsolutePosition"):Connect(close)
 							NestedElement.Instances[1]:GetPropertyChangedSignal("AbsolutePosition"):Connect(updPos)
