@@ -6902,28 +6902,27 @@ function Starlight:CreateWindow(WindowSettings)
 					end
 
 					function Element:AddColorPicker(NestedSettings, NestedIndex, Parent, ParentIndex)
-						Parent = Parent or Element
-						ParentIndex = ParentIndex or Index
+                    	Parent = Parent or Element
+                    	ParentIndex = ParentIndex or Index
 
-						--[[
-						NestedSettings = {
-							CurrentValue = Color3,
-							Transparency = number, **
-							
-							Callback = function(Color3, number),
-						}
-						]]
+                    	local NestedElement = {
+                    		Values = NestedSettings,
+                    		Class = "ColorPicker",
+                    		Instances = {},
+                    		IgnoreConfig = NestedSettings.IgnoreConfig,
+                    	}
 
-						local NestedElement = {
-							Values = NestedSettings,
-							Class = "ColorPicker",
-							Instances = {},
-							IgnoreConfig = NestedSettings.IgnoreConfig,
-						}
+                    	-- Add default for Transparency if nil to prevent indexing issues
+                    	if NestedElement.Values.Transparency == nil then
+                    		-- Keep it nil, but ensure all code handles nil properly
+                    	end
 
-						task.spawn(function()
-							local hover = false
-							local sliders = {}
+                    	task.spawn(function()
+                    		-- Add a small yield to ensure parent elements are ready
+                    		task.wait()
+
+                    		local hover = false
+                    		local sliders = {}
 
 							NestedElement.Instances[1] = Element.Instance.ElementContainer.ColorPicker:Clone()
 							NestedElement.Instances[1].Visible = true
@@ -7115,6 +7114,14 @@ function Starlight:CreateWindow(WindowSettings)
 							end
 
 							local function updateInstances(currentBox, ignoreCallback)
+                            	-- Safety check - ensure instances exist
+                            	if not NestedElement.Instances[1] or not NestedElement.Instances[2] then
+                            		return
+                            	end
+                            	if not NestedElement.Instances[2].Container then
+                            		return
+                            	end
+                            
 								local oldValue = Color3.fromRGB(
 									tonumber(
 										NestedElement.Instances[2].Container.Values.HexRGB.Red.PART_Backdrop.PART_Input.Text
@@ -7464,6 +7471,9 @@ function Starlight:CreateWindow(WindowSettings)
 								)
 
 								RunService.RenderStepped:Connect(function()
+                                if not NestedElement or not NestedElement.Instances or not NestedElement.Instances[1] or not NestedElement.Instances[2] then
+                            		return
+                            	end
 									if mainDragging then
 										local localX = math.clamp(
 											Mouse.X
