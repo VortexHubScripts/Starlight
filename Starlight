@@ -10029,29 +10029,22 @@ function Starlight:CreateWindow(WindowSettings)
 	end
 	--// ENDSUBSECTION
 
-	-- Ensure first tab is selected after loading
+	-- Ensure MainTab is selected after loading
 	task.spawn(function()
-	    -- Wait for all tabs to be created and added to the UI
+	    -- Wait for all tabs to be created
 	    task.wait(0.5)
 	
-	    -- Find the first tab (topmost in the list)
-	    local firstTab = nil
-	    local lowestOrder = math.huge
-	
+	    -- Find MainTab specifically
+	    local mainTab = nil
 	    for _, tabSection in pairs(Starlight.Window.TabSections) do
-	        for _, tab in pairs(tabSection.Tabs) do
-	            if tab.Instances and tab.Instances.Button and tab.Instances.Page then
-	                local order = tab.Instances.Button.LayoutOrder or tab.Instances.Page.LayoutOrder or 0
-	                if order < lowestOrder then
-	                    lowestOrder = order
-	                    firstTab = tab
-	                end
-	            end
+	        if tabSection.Tabs["MainTab"] then
+	            mainTab = tabSection.Tabs["MainTab"]
+	            break
 	        end
 	    end
 	
-	    -- Activate the first tab if found
-	    if firstTab and firstTab.Instances and firstTab.Instances.Button then
+	    -- Activate MainTab if found
+	    if mainTab and mainTab.Instances and mainTab.Instances.Button then
 	        -- Deactivate all tabs first
 	        for _, tabSection in pairs(Starlight.Window.TabSections) do
 	            for _, tab in pairs(tabSection.Tabs) do
@@ -10066,18 +10059,18 @@ function Starlight:CreateWindow(WindowSettings)
 	            end
 	        end
 	
-	        -- Activate first tab
-	        Tween(firstTab.Instances.Button, { BackgroundTransparency = 0.5 })
-	        Tween(firstTab.Instances.Button.Icon, { ImageColor3 = Starlight.CurrentTheme.Foregrounds.Light })
-	        Tween(firstTab.Instances.Button.Header, { TextColor3 = Starlight.CurrentTheme.Foregrounds.Light })
-	        firstTab.Instances.Button.Icon.AccentBrighter.Enabled = true
-	        firstTab.Instances.Button.Header.AccentBrighter.Enabled = true
-	        firstTab.Active = true
-	        Starlight.Window.CurrentTab = firstTab
-	        tabs.UIPageLayout:JumpTo(firstTab.Instances.Page)
+	        -- Activate MainTab
+	        Tween(mainTab.Instances.Button, { BackgroundTransparency = 0.5 })
+	        Tween(mainTab.Instances.Button.Icon, { ImageColor3 = Starlight.CurrentTheme.Foregrounds.Light })
+	        Tween(mainTab.Instances.Button.Header, { TextColor3 = Starlight.CurrentTheme.Foregrounds.Light })
+	        mainTab.Instances.Button.Icon.AccentBrighter.Enabled = true
+	        mainTab.Instances.Button.Header.AccentBrighter.Enabled = true
+	        mainTab.Active = true
+	        Starlight.Window.CurrentTab = mainTab
+	        tabs.UIPageLayout:JumpTo(mainTab.Instances.Page)
 	    end
 	end)
-	
+
 	-- Return the window
 	return Starlight.Window
 end
