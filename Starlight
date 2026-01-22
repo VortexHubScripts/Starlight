@@ -2287,6 +2287,19 @@ function Starlight:CreateWindow(WindowSettings)
 
 	Starlight.FileSystem:BuildFolderTree(WindowSettings.FileSettings)
 
+	-- Load saved UI keybind
+	if not isStudio and isfile then
+	    local keybindPath = Starlight.FileSystem.Folder .. "/ui_keybind.txt"
+	    if isfile(keybindPath) then
+	        pcall(function()
+	            local savedKey = readfile(keybindPath)
+	            if savedKey and savedKey ~= "" and savedKey ~= "No Bind" then
+	                Starlight.WindowKeybind = savedKey
+	            end
+	        end)
+	    end
+	end
+
 	Starlight.Window = {
 		Instance = mainWindow,
 		TabSections = {},
@@ -8666,7 +8679,7 @@ function Starlight:CreateWindow(WindowSettings)
 				    Icon = 6031071057,
 				    Tooltip = "Change the keybind to show/hide the UI"
 				}, "ui_keybind_label")
-				
+
 				uiKeybindLabel:AddBind({
 				    CurrentValue = Starlight.WindowKeybind,
 				    WindowSetting = true,
@@ -8674,7 +8687,7 @@ function Starlight:CreateWindow(WindowSettings)
 				    Tooltip = "Press to change the keybind to show/hide the UI",
 				    OnChangedCallback = function(newKey)
 				        Starlight.WindowKeybind = newKey
-				
+
 				        -- Save to file if possible
 				        if not isStudio and writefile then
 				            pcall(function()
@@ -8684,7 +8697,7 @@ function Starlight:CreateWindow(WindowSettings)
 				                writefile(Starlight.FileSystem.Folder .. "/ui_keybind.txt", newKey)
 				            end)
 				        end
-				
+
 				        Starlight:Notification({
 				            Title = "Keybind Changed",
 				            Icon = 6026568227,
@@ -8693,7 +8706,7 @@ function Starlight:CreateWindow(WindowSettings)
 				        })
 				    end,
 				}, "ui_keybind")
-				
+
 				instance:CreateDivider()
 
 				instance:CreateToggle({
