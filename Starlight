@@ -3461,16 +3461,7 @@ function Starlight:CreateWindow(WindowSettings)
 			end
 
 			if Starlight.Window.CurrentTab == nil then
-				repeat
-					task.wait()
-				until Tab.Instances.Page.Parent == tabs
-				Activate()
-			elseif #tabs:GetChildren() == 2 then -- Only Template + this tab exists
-				-- This is the first real tab, activate it
-				repeat
-					task.wait()
-				until Tab.Instances.Page.Parent == tabs
-				Activate()
+			    Starlight.Window._FirstTab = Tab
 			end
 
 			Tab.Instances.Button.Interact["MouseButton1Click"]:Connect(Activate)
@@ -3628,16 +3619,7 @@ function Starlight:CreateWindow(WindowSettings)
 			end
 
 			if Starlight.Window.CurrentTab == nil then
-				repeat
-					task.wait()
-				until Tab.Instances.Page.Parent == tabs
-				Activate()
-			elseif #tabs:GetChildren() == 2 then -- Only Template + this tab exists
-				-- This is the first real tab, activate it
-				repeat
-					task.wait()
-				until Tab.Instances.Page.Parent == tabs
-				Activate()
+			    Starlight.Window._FirstTab = Tab
 			end
 
 			Tab.Instances.Button.Interact["MouseButton1Click"]:Connect(Activate)
@@ -10047,9 +10029,60 @@ function Starlight:CreateWindow(WindowSettings)
 	end
 	--// ENDSUBSECTION
 
+	-- Ensure first tab is selected after loading
+	task.spawn(function()
+	    -- Wait for all tabs to be created and added to the UI
+	    task.wait(0.5)
+	
+	    -- Find the first tab (topmost in the list)
+	    local firstTab = nil
+	    local lowestOrder = math.huge
+	
+	    for _, tabSection in pairs(Starlight.Window.TabSections) do
+	        for _, tab in pairs(tabSection.Tabs) do
+	            if tab.Instances and tab.Instances.Button and tab.Instances.Page then
+	                local order = tab.Instances.Button.LayoutOrder or tab.Instances.Page.LayoutOrder or 0
+	                if order < lowestOrder then
+	                    lowestOrder = order
+	                    firstTab = tab
+	                end
+	            end
+	        end
+	    end
+	
+	    -- Activate the first tab if found
+	    if firstTab and firstTab.Instances and firstTab.Instances.Button then
+	        -- Deactivate all tabs first
+	        for _, tabSection in pairs(Starlight.Window.TabSections) do
+	            for _, tab in pairs(tabSection.Tabs) do
+	                tab.Active = false
+	                if tab.Instances and tab.Instances.Button then
+	                    Tween(tab.Instances.Button, { BackgroundTransparency = 1 })
+	                    Tween(tab.Instances.Button.Icon, { ImageColor3 = Starlight.CurrentTheme.Foregrounds.Medium })
+	                    Tween(tab.Instances.Button.Header, { TextColor3 = Starlight.CurrentTheme.Foregrounds.Medium })
+	                    tab.Instances.Button.Icon.AccentBrighter.Enabled = false
+	                    tab.Instances.Button.Header.AccentBrighter.Enabled = false
+	                end
+	            end
+	        end
+	
+	        -- Activate first tab
+	        Tween(firstTab.Instances.Button, { BackgroundTransparency = 0.5 })
+	        Tween(firstTab.Instances.Button.Icon, { ImageColor3 = Starlight.CurrentTheme.Foregrounds.Light })
+	        Tween(firstTab.Instances.Button.Header, { TextColor3 = Starlight.CurrentTheme.Foregrounds.Light })
+	        firstTab.Instances.Button.Icon.AccentBrighter.Enabled = true
+	        firstTab.Instances.Button.Header.AccentBrighter.Enabled = true
+	        firstTab.Active = true
+	        Starlight.Window.CurrentTab = firstTab
+	        tabs.UIPageLayout:JumpTo(firstTab.Instances.Page)
+	    end
+	end)
+	
 	-- Return the window
 	return Starlight.Window
 end
+
+
 
 --// SECTION : Config System
 
