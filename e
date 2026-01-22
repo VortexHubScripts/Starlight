@@ -8686,10 +8686,12 @@ function Starlight:CreateWindow(WindowSettings)
 				    IgnoreConfig = true,
 				    Tooltip = "Press to change the keybind to show/hide the UI",
 				    Callback = function(active)
-				        -- This callback is for when the bind is activated (not needed for window setting)
-				        -- We leave it empty since WindowSetting handles the UI toggle automatically
+				        -- This callback is for the bind being pressed (not needed for WindowSetting)
+				        -- But we need to provide it to prevent the nil error
 				    end,
 				    OnChangedCallback = function(newKey)
+				        Starlight.WindowKeybind = newKey
+				
 				        -- Save to file if possible
 				        if not isStudio and writefile then
 				            pcall(function()
@@ -8709,8 +8711,6 @@ function Starlight:CreateWindow(WindowSettings)
 				    end,
 				}, "ui_keybind")
 				
-				instance:CreateDivider()
-
 				instance:CreateToggle({
 					Name = "Acrylic",
 					CurrentValue = false,
