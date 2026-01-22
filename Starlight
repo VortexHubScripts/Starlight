@@ -10696,4 +10696,3 @@ if isStudio and enabled then
 end --]=]0
 
 return Starlight
-print("hi")
