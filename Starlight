@@ -6359,11 +6359,10 @@ function Starlight:CreateWindow(WindowSettings)
 								Element.Values
 						end
 				
-						-- NEW METHOD: SetText for updating label text
+						-- ADD THIS NEW METHOD
 						function Element:SetText(newText)
 							Element.Values.Name = newText
 							Element.Instance.Header.Text = newText
-							
 							Starlight.Window.TabSections[Name].Tabs[TabIndex].Groupboxes[GroupIndex].Elements[Index].Values.Name = newText
 						end
 				
