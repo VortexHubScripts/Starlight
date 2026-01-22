@@ -81,6 +81,7 @@ local Starlight = {
 	Maximized = false,
 	NotificationsOpen = false,
 	DialogOpen = false,
+	OpenColorPicker = nil,
 
 	Window = nil,
 	Notifications = nil,
@@ -7039,6 +7040,8 @@ function Starlight:CreateWindow(WindowSettings)
 							AcrylicObject.Frame.Parent = NestedElement.Instances[2]
 
 							local function close()
+								Starlight.OpenColorPicker = nil -- Clear the tracker when closing
+								
 								if
 									NestedElement.Instances[1].AbsolutePosition.Y + 27 + 245
 									>= Camera.ViewportSize.Y - (GuiInset + 20)
@@ -8058,23 +8061,52 @@ function Starlight:CreateWindow(WindowSettings)
 								if NestedElement.Instances[2].Visible then
 									close()
 								else
+									-- Close any other open color picker
+									if Starlight.OpenColorPicker and Starlight.OpenColorPicker ~= NestedElement then
+										pcall(function()
+											if Starlight.OpenColorPicker.Instances[2].Visible then
+												-- Close the other color picker
+												local otherCP = Starlight.OpenColorPicker
+												Tween(
+													otherCP.Instances[2].List,
+													{ Size = UDim2.new(1, 0, 0, 0) },
+													nil,
+													Tween.Info(nil, nil, 0.18)
+												)
+												Tween(
+													otherCP.Instances[2],
+													{ Size = UDim2.fromOffset(otherCP.Instances[2].Size.X.Offset, 0) },
+													function()
+														if otherCP and otherCP.Instances ~= nil then
+															otherCP.Instances[2].Visible = false
+															if acrylicFlag and AcrylicObject and AcrylicObject.Model then
+																AcrylicObject.Model.Transparency = 1
+															end
+														end
+													end,
+													Tween.Info(nil, nil, 0.18)
+												)
+												otherCP.Instances[2].Container.Color.OldColor.Frame.BackgroundColor3 =
+													otherCP.Values.CurrentValue
+												otherCP.Instances[2].Container.Color.OldColor.Frame.BackgroundTransparency = otherCP.Values.Transparency
+													or 0
+											end
+										end)
+									end
+
+									-- Set this as the currently open color picker
+									Starlight.OpenColorPicker = NestedElement
+
 									NestedElement.Instances[2].Visible = true
-									height = NestedElement.Instances[2].List.AbsoluteCanvasSize.Y >= 175 and 175
-										or NestedElement.Instances[2].List.AbsoluteCanvasSize.Y
-									updPos()
-									NestedElement.Instances[2].List.Size = UDim2.new(1, 0, 0, 0)
-									NestedElement.Instances[2].List.ScrollBarImageTransparency = 1
 									Tween(
 										NestedElement.Instances[2],
-										{ Size = UDim2.fromOffset(NestedElement.Instances[2].Size.X.Offset, height) }
+										{ Size = UDim2.fromOffset(320, 245) },
+										nil,
+										Tween.Info(nil, nil, 0.18)
 									)
-									Tween(
-										NestedElement.Instances[2].List,
-										{ Size = UDim2.new(1, 0, 0, height) },
-										function()
-											NestedElement.Instances[2].List.ScrollBarImageTransparency = 0
-										end
-									)
+									NestedElement.Instances[2].Container.Visible = true
+									NestedElement.Instances[2].TabSelector.Visible = true
+									NestedElement.Instances[2].Buttons.Visible = true
 									if acrylicFlag then
 										AcrylicObject.Model.Transparency = 0.98
 									end
@@ -8096,6 +8128,7 @@ function Starlight:CreateWindow(WindowSettings)
 											) and not hover
 										then
 											close()
+											Starlight.OpenColorPicker = nil -- Clear the tracker when closing
 											connection:Disconnect()
 										end
 									end)
@@ -8682,11 +8715,49 @@ function Starlight:CreateWindow(WindowSettings)
 
 				uiKeybindLabel:AddBind({
 				    CurrentValue = Starlight.WindowKeybind,
-				    WindowSetting = true,
 				    IgnoreConfig = true,
-				    Tooltip = "Press to change the keybind to show/hide the UI",
+				    HoldToInteract = false,
+				    SyncToggleState = false,
+				    Tooltip = "Click to change the keybind to show/hide the UI",
+				    Callback = function(active)
+				        -- Empty callback - this bind is only for changing the key, not triggering an action
+				    end,
 				    OnChangedCallback = function(newKey)
+				        -- Update the window keybind
 				        Starlight.WindowKeybind = newKey
+
+				        -- Update the connection
+				        if connections["__windowKeybindHidingBindConnection"] then
+				            connections["__windowKeybindHidingBindConnection"]:Disconnect()
+				        end
+
+				        connections["__windowKeybindHidingBindConnection"] = UserInputService.InputBegan:Connect(function(input, gpe)
+				            if gpe then return end
+				            if input.KeyCode == Enum.KeyCode[Starlight.WindowKeybind] then
+				                local debounce = false
+				                if Starlight.Minimized == true then
+				                    if not debounce then
+				                        debounce = true
+				                        Unhide(mainWindow)
+				                        Unhide(StarlightUI.Drag)
+				                        Tween(mainWindow.Content.Topbar.Controls.Minimize.Fill.Icon, { Position = UDim2.fromScale(0.5, 1.5) })
+				                        Tween(mainWindow.Content.Topbar.Controls.Minimize.Fill, { BackgroundTransparency = 1 })
+				                        task.delay(0.4, function()
+				                            debounce = false
+				                        end)
+				                    end
+				                elseif Starlight.Minimized == false then
+				                    if not debounce then
+				                        debounce = true
+				                        Hide(mainWindow, false, true, Starlight.WindowKeybind)
+				                        Hide(StarlightUI.Drag, false, false, Starlight.WindowKeybind)
+				                        task.delay(0.4, function()
+				                            debounce = false
+				                        end)
+				                    end
+				                end
+				            end
+				        end)
 
 				        -- Save to file if possible
 				        if not isStudio and writefile then
