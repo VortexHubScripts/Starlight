@@ -3300,14 +3300,14 @@ function Starlight:CreateWindow(WindowSettings)
 		Tab.Instances.Page.Holder.Right.UIKeybind.Name = "UIKeybind"
 		Tab.Instances.Page.Holder.Right.UIKeybind.Header.Text = "UI Keybind"
 		Tab.Instances.Page.Holder.Right.UIKeybind.Subheader.Text = "Press to change the keybind\nto show/hide the UI"
-		
+
 		-- Clear the frame content
 		for _, child in pairs(Tab.Instances.Page.Holder.Right.UIKeybind.Frame:GetChildren()) do
 			if child:IsA("GuiObject") and child.Name ~= "UIListLayout" then
 				child:Destroy()
 			end
 		end
-		
+
 		-- Create keybind display
 		local keybindButton = Instance.new("TextButton")
 		keybindButton.Name = "KeybindButton"
@@ -3319,37 +3319,37 @@ function Starlight:CreateWindow(WindowSettings)
 		keybindButton.TextColor3 = Starlight.CurrentTheme.Foregrounds.Light
 		keybindButton.TextSize = 18
 		keybindButton.Parent = Tab.Instances.Page.Holder.Right.UIKeybind.Frame
-		
+
 		local corner = Instance.new("UICorner")
 		corner.CornerRadius = UDim.new(0, 4)
 		corner.Parent = keybindButton
-		
+
 		local stroke = Instance.new("UIStroke")
 		stroke.Color = Starlight.CurrentTheme.Foregrounds.Dark
 		stroke.Thickness = 1
 		stroke.Parent = keybindButton
-		
+
 		ThemeMethods.bindTheme(keybindButton, "BackgroundColor3", "Backgrounds.Dark")
 		ThemeMethods.bindTheme(keybindButton, "TextColor3", "Foregrounds.Light")
 		ThemeMethods.bindTheme(stroke, "Color", "Foregrounds.Dark")
-		
+
 		local isChangingKey = false
-		
+
 		keybindButton.MouseButton1Click:Connect(function()
 			if isChangingKey then return end
 			isChangingKey = true
 			keybindButton.Text = "Press any key..."
-			
+
 			local connection
 			connection = UserInputService.InputBegan:Connect(function(input, processed)
 				if processed then return end
-				
+
 				if input.UserInputType == Enum.UserInputType.Keyboard then
 					if input.KeyCode ~= Enum.KeyCode.Unknown then
 						local keyName = input.KeyCode.Name
 						Starlight.WindowKeybind = keyName
 						keybindButton.Text = keyName
-						
+
 						-- Save to file if possible
 						if not isStudio and writefile then
 							pcall(function()
@@ -3359,19 +3359,19 @@ function Starlight:CreateWindow(WindowSettings)
 								writefile(Starlight.FileSystem.Folder .. "/ui_keybind.txt", keyName)
 							end)
 						end
-						
+
 						Starlight:Notification({
 							Title = "Keybind Changed",
 							Icon = 6026568227,
 							Content = string.format("UI keybind changed to %s", keyName),
 						})
-						
+
 						isChangingKey = false
 						connection:Disconnect()
 					end
 				end
 			end)
-			
+
 			-- Timeout after 5 seconds
 			task.delay(5, function()
 				if isChangingKey then
@@ -3381,11 +3381,11 @@ function Starlight:CreateWindow(WindowSettings)
 				end
 			end)
 		end)
-		
+
 		keybindButton.MouseEnter:Connect(function()
 			Tween(stroke, { Color = Starlight.CurrentTheme.Foregrounds.DarkHover })
 		end)
-		
+
 		keybindButton.MouseLeave:Connect(function()
 			Tween(stroke, { Color = Starlight.CurrentTheme.Foregrounds.Dark })
 		end)
@@ -8659,6 +8659,42 @@ function Starlight:CreateWindow(WindowSettings)
 				for _, v in pairs(customThemes) do
 					table.insert(themesArray, v)
 				end
+
+				-- UI Hide Keybind
+				local uiKeybindLabel = instance:CreateLabel({
+				    Name = "UI Toggle Keybind",
+				    Icon = 6031071057,
+				    Tooltip = "Change the keybind to show/hide the UI"
+				}, "ui_keybind_label")
+				
+				uiKeybindLabel:AddBind({
+				    CurrentValue = Starlight.WindowKeybind,
+				    WindowSetting = true,
+				    IgnoreConfig = true,
+				    Tooltip = "Press to change the keybind to show/hide the UI",
+				    OnChangedCallback = function(newKey)
+				        Starlight.WindowKeybind = newKey
+				
+				        -- Save to file if possible
+				        if not isStudio and writefile then
+				            pcall(function()
+				                if not isfolder(Starlight.FileSystem.Folder) then
+				                    makefolder(Starlight.FileSystem.Folder)
+				                end
+				                writefile(Starlight.FileSystem.Folder .. "/ui_keybind.txt", newKey)
+				            end)
+				        end
+				
+				        Starlight:Notification({
+				            Title = "Keybind Changed",
+				            Icon = 6026568227,
+				            Content = string.format("UI hide keybind changed to %s", newKey),
+				            Duration = 2,
+				        })
+				    end,
+				}, "ui_keybind")
+				
+				instance:CreateDivider()
 
 				instance:CreateToggle({
 					Name = "Acrylic",
