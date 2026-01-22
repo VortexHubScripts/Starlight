@@ -7029,15 +7029,15 @@ function Starlight:CreateWindow(WindowSettings)
 							NestedElement.Instances[2].Name = "COLORPICKER_" .. NestedIndex
 
 							acrylicEvent.Event:Connect(function()
-								if mainAcrylic then
-									NestedElement.Instances[2].BackgroundTransparency = 0.5
-								else
-									NestedElement.Instances[2].BackgroundTransparency = 0
-								end
-							end)
-							local AcrylicObject = Acrylic.AcrylicPaint()
-							AcrylicObject.AddParent(NestedElement.Instances[2])
-							AcrylicObject.Frame.Parent = NestedElement.Instances[2]
+                            	if mainAcrylic then
+                            		NestedElement.Instances[2].BackgroundTransparency = 0.5
+                            	else
+                            		NestedElement.Instances[2].BackgroundTransparency = 0
+                            	end
+                            end)
+                            NestedElement.AcrylicObject = Acrylic.AcrylicPaint()
+                            NestedElement.AcrylicObject.AddParent(NestedElement.Instances[2])
+                            NestedElement.AcrylicObject.Frame.Parent = NestedElement.Instances[2]
 
 							local function close()
 								Starlight.OpenColorPicker = nil -- Clear the tracker when closing
@@ -7060,18 +7060,18 @@ function Starlight:CreateWindow(WindowSettings)
 								end
 
 								NestedElement.Instances[2].Container.Visible = false
-								NestedElement.Instances[2].TabSelector.Visible = false
-								NestedElement.Instances[2].Buttons.Visible = false
+                            	NestedElement.Instances[2].TabSelector.Visible = false
+                            	NestedElement.Instances[2].Buttons.Visible = false
 
-								Tween(NestedElement.Instances[2], { Size = UDim2.fromOffset(0, 0) }, function()
-									if NestedElement and NestedElement.Instances ~= nil then
-										NestedElement.Instances[2].Visible = false
-										if acrylicFlag and AcrylicObject and AcrylicObject.Model then
-											AcrylicObject.Model.Transparency = 1
-										end
-									end
-								end, Tween.Info(nil, nil, 0.24))
-
+                            	Tween(NestedElement.Instances[2], { Size = UDim2.fromOffset(0, 0) }, function()
+                            		if NestedElement and NestedElement.Instances ~= nil then
+                            			NestedElement.Instances[2].Visible = false
+                            			if acrylicFlag and NestedElement.AcrylicObject and NestedElement.AcrylicObject.Model then
+                            				NestedElement.AcrylicObject.Model.Transparency = 1
+                            			end
+                            		end
+                            	end, Tween.Info(nil, nil, 0.24))
+                            
 								NestedElement.Instances[2].Container.Color.OldColor.Frame.BackgroundColor3 =
 									NestedElement.Values.CurrentValue
 								NestedElement.Instances[2].Container.Color.OldColor.Frame.BackgroundTransparency = NestedElement.Values.Transparency
