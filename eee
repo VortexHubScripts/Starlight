@@ -82,6 +82,7 @@ local Starlight = {
 	NotificationsOpen = false,
 	DialogOpen = false,
 	OpenColorPicker = nil,
+    OpenDropdown = nil,
 
 	Window = nil,
 	Notifications = nil,
@@ -8023,12 +8024,14 @@ function Starlight:CreateWindow(WindowSettings)
 								end
 							end
 							local function close()
-								Tween(
-									NestedElement.Instances[2].List,
-									{ Size = UDim2.new(1, 0, 0, 0) },
-									nil,
-									Tween.Info(nil, nil, 0.18)
-								)
+                            	Starlight.OpenDropdown = nil -- Clear the tracker when closing
+                                                        
+                            	Tween(
+                            		NestedElement.Instances[2].List,
+                            		{ Size = UDim2.new(1, 0, 0, 0) },
+                            		nil,
+                            		Tween.Info(nil, nil, 0.18)
+                            	)
 								Tween(
 									NestedElement.Instances[2],
 									{ Size = UDim2.fromOffset(NestedElement.Instances[2].Size.X.Offset, 0) },
@@ -8058,44 +8061,40 @@ function Starlight:CreateWindow(WindowSettings)
 							end)
 
 							NestedElement.Instances[1].Interact.MouseButton1Click:Connect(function()
-								if NestedElement.Instances[2].Visible then
-									close()
-								else
-									-- Close any other open color picker
-									if Starlight.OpenColorPicker and Starlight.OpenColorPicker ~= NestedElement then
-										pcall(function()
-											if Starlight.OpenColorPicker.Instances[2].Visible then
-												-- Close the other color picker
-												local otherCP = Starlight.OpenColorPicker
-												Tween(
-													otherCP.Instances[2].List,
-													{ Size = UDim2.new(1, 0, 0, 0) },
-													nil,
-													Tween.Info(nil, nil, 0.18)
-												)
-												Tween(
-													otherCP.Instances[2],
-													{ Size = UDim2.fromOffset(otherCP.Instances[2].Size.X.Offset, 0) },
-													function()
-														if otherCP and otherCP.Instances ~= nil then
-															otherCP.Instances[2].Visible = false
-															if acrylicFlag and NestedElement.AcrylicObject and NestedElement.AcrylicObject.Model then
-                                                            	NestedElement.AcrylicObject.Model.Transparency = 1
-															end
-														end
-													end,
-													Tween.Info(nil, nil, 0.18)
-												)
-												otherCP.Instances[2].Container.Color.OldColor.Frame.BackgroundColor3 =
-													otherCP.Values.CurrentValue
-												otherCP.Instances[2].Container.Color.OldColor.Frame.BackgroundTransparency = otherCP.Values.Transparency
-													or 0
-											end
-										end)
-									end
-
-									-- Set this as the currently open color picker
-									Starlight.OpenColorPicker = NestedElement
+	                            if NestedElement.Instances[2].Visible then
+	                            	close()
+	                            else
+	                            	-- Close any other open dropdown
+	                            	if Starlight.OpenDropdown and Starlight.OpenDropdown ~= NestedElement then
+	                            		pcall(function()
+	                            			if Starlight.OpenDropdown.Instances[2].Visible then
+	                            				-- Close the other dropdown
+	                            				local otherDD = Starlight.OpenDropdown
+	                            				Tween(
+	                            					otherDD.Instances[2].List,
+	                            					{ Size = UDim2.new(1, 0, 0, 0) },
+	                            					nil,
+	                            					Tween.Info(nil, nil, 0.18)
+	                            				)
+	                            				Tween(
+	                            					otherDD.Instances[2],
+	                            					{ Size = UDim2.fromOffset(otherDD.Instances[2].Size.X.Offset, 0) },
+	                            					function()
+	                            						if otherDD and otherDD.Instances ~= nil then
+	                            							otherDD.Instances[2].Visible = false
+	                            							if acrylicFlag and otherDD.AcrylicObject and otherDD.AcrylicObject.Model then
+	                            								otherDD.AcrylicObject.Model.Transparency = 1
+	                            							end
+	                            						end
+	                            					end,
+	                            					Tween.Info(nil, nil, 0.18)
+	                            				)
+	                            			end
+	                            		end)
+	                            	end
+                                
+	                            	-- Set this as the currently open dropdown
+	                            	Starlight.OpenDropdown = NestedElement
 
 									NestedElement.Instances[2].Visible = true
 									Tween(
