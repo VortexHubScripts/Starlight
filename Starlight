@@ -3294,6 +3294,102 @@ function Starlight:CreateWindow(WindowSettings)
 		Start = TimeFunction()
 		connections.__fpscheck = RunService.Heartbeat:Connect(HeartbeatUpdate)
 
+		-- Add after the Server section in the Home Tab
+		Tab.Instances.Page.Holder.Right.UIKeybind = Tab.Instances.Page.Holder.Right.Server:Clone()
+		Tab.Instances.Page.Holder.Right.UIKeybind.Parent = Tab.Instances.Page.Holder.Right
+		Tab.Instances.Page.Holder.Right.UIKeybind.Name = "UIKeybind"
+		Tab.Instances.Page.Holder.Right.UIKeybind.Header.Text = "UI Keybind"
+		Tab.Instances.Page.Holder.Right.UIKeybind.Subheader.Text = "Press to change the keybind\nto show/hide the UI"
+		
+		-- Clear the frame content
+		for _, child in pairs(Tab.Instances.Page.Holder.Right.UIKeybind.Frame:GetChildren()) do
+			if child:IsA("GuiObject") and child.Name ~= "UIListLayout" then
+				child:Destroy()
+			end
+		end
+		
+		-- Create keybind display
+		local keybindButton = Instance.new("TextButton")
+		keybindButton.Name = "KeybindButton"
+		keybindButton.Size = UDim2.new(1, 0, 0, 40)
+		keybindButton.BackgroundColor3 = Starlight.CurrentTheme.Backgrounds.Dark
+		keybindButton.BorderSizePixel = 0
+		keybindButton.Font = Enum.Font.GothamBold
+		keybindButton.Text = Starlight.WindowKeybind
+		keybindButton.TextColor3 = Starlight.CurrentTheme.Foregrounds.Light
+		keybindButton.TextSize = 18
+		keybindButton.Parent = Tab.Instances.Page.Holder.Right.UIKeybind.Frame
+		
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0, 4)
+		corner.Parent = keybindButton
+		
+		local stroke = Instance.new("UIStroke")
+		stroke.Color = Starlight.CurrentTheme.Foregrounds.Dark
+		stroke.Thickness = 1
+		stroke.Parent = keybindButton
+		
+		ThemeMethods.bindTheme(keybindButton, "BackgroundColor3", "Backgrounds.Dark")
+		ThemeMethods.bindTheme(keybindButton, "TextColor3", "Foregrounds.Light")
+		ThemeMethods.bindTheme(stroke, "Color", "Foregrounds.Dark")
+		
+		local isChangingKey = false
+		
+		keybindButton.MouseButton1Click:Connect(function()
+			if isChangingKey then return end
+			isChangingKey = true
+			keybindButton.Text = "Press any key..."
+			
+			local connection
+			connection = UserInputService.InputBegan:Connect(function(input, processed)
+				if processed then return end
+				
+				if input.UserInputType == Enum.UserInputType.Keyboard then
+					if input.KeyCode ~= Enum.KeyCode.Unknown then
+						local keyName = input.KeyCode.Name
+						Starlight.WindowKeybind = keyName
+						keybindButton.Text = keyName
+						
+						-- Save to file if possible
+						if not isStudio and writefile then
+							pcall(function()
+								if not isfolder(Starlight.FileSystem.Folder) then
+									makefolder(Starlight.FileSystem.Folder)
+								end
+								writefile(Starlight.FileSystem.Folder .. "/ui_keybind.txt", keyName)
+							end)
+						end
+						
+						Starlight:Notification({
+							Title = "Keybind Changed",
+							Icon = 6026568227,
+							Content = string.format("UI keybind changed to %s", keyName),
+						})
+						
+						isChangingKey = false
+						connection:Disconnect()
+					end
+				end
+			end)
+			
+			-- Timeout after 5 seconds
+			task.delay(5, function()
+				if isChangingKey then
+					keybindButton.Text = Starlight.WindowKeybind
+					isChangingKey = false
+					connection:Disconnect()
+				end
+			end)
+		end)
+		
+		keybindButton.MouseEnter:Connect(function()
+			Tween(stroke, { Color = Starlight.CurrentTheme.Foregrounds.DarkHover })
+		end)
+		
+		keybindButton.MouseLeave:Connect(function()
+			Tween(stroke, { Color = Starlight.CurrentTheme.Foregrounds.Dark })
+		end)
+
 		ThemeMethods.bindTheme(Tab.Instances.Button, "BackgroundColor3", "Backgrounds.Dark")
 		ThemeMethods.bindTheme(Tab.Instances.Button.Accent, "Color", "Accents.Main")
 		ThemeMethods.bindTheme(Tab.Instances.Button.Icon.AccentBrighter, "Color", "Accents.Brighter")
