@@ -8682,15 +8682,49 @@ function Starlight:CreateWindow(WindowSettings)
 				
 				uiKeybindLabel:AddBind({
 				    CurrentValue = Starlight.WindowKeybind,
-				    WindowSetting = true,
 				    IgnoreConfig = true,
-				    Tooltip = "Press to change the keybind to show/hide the UI",
+				    HoldToInteract = false,
+				    SyncToggleState = false,
+				    Tooltip = "Click to change the keybind to show/hide the UI",
 				    Callback = function(active)
-				        -- This callback is for the bind being pressed (not needed for WindowSetting)
-				        -- But we need to provide it to prevent the nil error
+				        -- Empty callback - this bind is only for changing the key, not triggering an action
 				    end,
 				    OnChangedCallback = function(newKey)
+				        -- Update the window keybind
 				        Starlight.WindowKeybind = newKey
+				
+				        -- Update the connection
+				        if connections["__windowKeybindHidingBindConnection"] then
+				            connections["__windowKeybindHidingBindConnection"]:Disconnect()
+				        end
+				
+				        connections["__windowKeybindHidingBindConnection"] = UserInputService.InputBegan:Connect(function(input, gpe)
+				            if gpe then return end
+				            if input.KeyCode == Enum.KeyCode[Starlight.WindowKeybind] then
+				                local debounce = false
+				                if Starlight.Minimized == true then
+				                    if not debounce then
+				                        debounce = true
+				                        Unhide(mainWindow)
+				                        Unhide(StarlightUI.Drag)
+				                        Tween(mainWindow.Content.Topbar.Controls.Minimize.Fill.Icon, { Position = UDim2.fromScale(0.5, 1.5) })
+				                        Tween(mainWindow.Content.Topbar.Controls.Minimize.Fill, { BackgroundTransparency = 1 })
+				                        task.delay(0.4, function()
+				                            debounce = false
+				                        end)
+				                    end
+				                elseif Starlight.Minimized == false then
+				                    if not debounce then
+				                        debounce = true
+				                        Hide(mainWindow, false, true, Starlight.WindowKeybind)
+				                        Hide(StarlightUI.Drag, false, false, Starlight.WindowKeybind)
+				                        task.delay(0.4, function()
+				                            debounce = false
+				                        end)
+				                    end
+				                end
+				            end
+				        end)
 				
 				        -- Save to file if possible
 				        if not isStudio and writefile then
@@ -8711,6 +8745,8 @@ function Starlight:CreateWindow(WindowSettings)
 				    end,
 				}, "ui_keybind")
 				
+				instance:CreateDivider()
+
 				instance:CreateToggle({
 					Name = "Acrylic",
 					CurrentValue = false,
