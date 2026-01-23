@@ -2413,10 +2413,12 @@ function Starlight:CreateWindow(WindowSettings)
 			end
 		end
 
-		mainWindow.Sidebar.Player.PlayerIcon.Image =
+		-- Player profile section hidden
+		mainWindow.Sidebar.Player.Visible = false
+		--[[mainWindow.Sidebar.Player.PlayerIcon.Image =
 			Players:GetUserThumbnailAsync(Player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48)
 		mainWindow.Sidebar.Player.Header.Text = Player.DisplayName
-		mainWindow.Sidebar.Player.subheader.Text = Player.Name
+		mainWindow.Sidebar.Player.subheader.Text = Player.Name]]
 
 		ContentProvider:PreloadAsync({
 			"rbxassetid://116767744785553", -- cursor
@@ -2460,10 +2462,10 @@ function Starlight:CreateWindow(WindowSettings)
 			end
 			ThemeMethods.bindTheme(mainWindow.Sidebar.DropShadowHolder.DropShadow, "ImageColor3", "Foregrounds.Dark")
 			ThemeMethods.bindTheme(mainWindow.Sidebar.Header, "TextColor3", "Foregrounds.Light")
-			ThemeMethods.bindTheme(mainWindow.Sidebar.Player.PlayerIcon, "BackgroundColor3", "Backgrounds.Groupbox")
+			--[[ThemeMethods.bindTheme(mainWindow.Sidebar.Player.PlayerIcon, "BackgroundColor3", "Backgrounds.Groupbox")
 			ThemeMethods.bindTheme(mainWindow.Sidebar.Player.Header, "TextColor3", "Foregrounds.Light")
 			ThemeMethods.bindTheme(mainWindow.Sidebar.Player.Header.Icon.Accent, "Color", "Accents.Main")
-			ThemeMethods.bindTheme(mainWindow.Sidebar.Player.subheader, "TextColor3", "Foregrounds.Medium")
+			ThemeMethods.bindTheme(mainWindow.Sidebar.Player.subheader, "TextColor3", "Foregrounds.Medium")]]
 			ThemeMethods.bindTheme(mainWindow.Content.Topbar, "BackgroundColor3", "Backgrounds.Medium")
 			for _, cornerrepair in pairs(mainWindow.Content.Topbar.CornerRepairs:GetChildren()) do
 				ThemeMethods.bindTheme(cornerrepair, "ImageColor3", "Backgrounds.Medium")
