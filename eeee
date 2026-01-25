@@ -1402,13 +1402,16 @@ local function Hide(Interface, JustHide: boolean?, Notify: boolean?, Bind: strin
 		Interface.Visible = false
 	end
 
-	-- hide popups
-	if not isStudio and Starlight.Instance.MobileToggle.Visible then
-		InputManager:SendTouchEvent(0, 0, 0, 0)
-		InputManager:SendTouchEvent(0, 2, 0, 0)
-	elseif not isStudio then
-		InputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
-		InputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+	-- hide popups - ONLY when hiding the main window (when Notify parameter is used)
+	-- This prevents forced clicks when notifications are created
+	if Notify then
+		if not isStudio and Starlight.Instance.MobileToggle.Visible then
+			InputManager:SendTouchEvent(0, 0, 0, 0)
+			InputManager:SendTouchEvent(0, 2, 0, 0)
+		elseif not isStudio then
+			InputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+			InputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+		end
 	end
 
 	if Notify then
@@ -2413,12 +2416,10 @@ function Starlight:CreateWindow(WindowSettings)
 			end
 		end
 
-		-- Player profile section hidden
-		mainWindow.Sidebar.Player.Visible = false
-		--[[mainWindow.Sidebar.Player.PlayerIcon.Image =
+		mainWindow.Sidebar.Player.PlayerIcon.Image =
 			Players:GetUserThumbnailAsync(Player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48)
 		mainWindow.Sidebar.Player.Header.Text = Player.DisplayName
-		mainWindow.Sidebar.Player.subheader.Text = Player.Name]]
+		mainWindow.Sidebar.Player.subheader.Text = Player.Name
 
 		ContentProvider:PreloadAsync({
 			"rbxassetid://116767744785553", -- cursor
@@ -2462,10 +2463,10 @@ function Starlight:CreateWindow(WindowSettings)
 			end
 			ThemeMethods.bindTheme(mainWindow.Sidebar.DropShadowHolder.DropShadow, "ImageColor3", "Foregrounds.Dark")
 			ThemeMethods.bindTheme(mainWindow.Sidebar.Header, "TextColor3", "Foregrounds.Light")
-			--[[ThemeMethods.bindTheme(mainWindow.Sidebar.Player.PlayerIcon, "BackgroundColor3", "Backgrounds.Groupbox")
+			ThemeMethods.bindTheme(mainWindow.Sidebar.Player.PlayerIcon, "BackgroundColor3", "Backgrounds.Groupbox")
 			ThemeMethods.bindTheme(mainWindow.Sidebar.Player.Header, "TextColor3", "Foregrounds.Light")
 			ThemeMethods.bindTheme(mainWindow.Sidebar.Player.Header.Icon.Accent, "Color", "Accents.Main")
-			ThemeMethods.bindTheme(mainWindow.Sidebar.Player.subheader, "TextColor3", "Foregrounds.Medium")]]
+			ThemeMethods.bindTheme(mainWindow.Sidebar.Player.subheader, "TextColor3", "Foregrounds.Medium")
 			ThemeMethods.bindTheme(mainWindow.Content.Topbar, "BackgroundColor3", "Backgrounds.Medium")
 			for _, cornerrepair in pairs(mainWindow.Content.Topbar.CornerRepairs:GetChildren()) do
 				ThemeMethods.bindTheme(cornerrepair, "ImageColor3", "Backgrounds.Medium")
