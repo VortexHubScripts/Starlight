@@ -82,6 +82,7 @@ local Starlight = {
 	NotificationsOpen = false,
 	DialogOpen = false,
 	OpenColorPicker = nil,
+    OpenDropdown = nil,
 
 	Window = nil,
 	Notifications = nil,
@@ -1401,13 +1402,16 @@ local function Hide(Interface, JustHide: boolean?, Notify: boolean?, Bind: strin
 		Interface.Visible = false
 	end
 
-	-- hide popups
-	if not isStudio and Starlight.Instance.MobileToggle.Visible then
-		InputManager:SendTouchEvent(0, 0, 0, 0)
-		InputManager:SendTouchEvent(0, 2, 0, 0)
-	elseif not isStudio then
-		InputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
-		InputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+	-- hide popups - ONLY when hiding the main window (when Notify parameter is used)
+	-- This prevents forced clicks when notifications are created
+	if Notify then
+		if not isStudio and Starlight.Instance.MobileToggle.Visible then
+			InputManager:SendTouchEvent(0, 0, 0, 0)
+			InputManager:SendTouchEvent(0, 2, 0, 0)
+		elseif not isStudio then
+			InputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+			InputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+		end
 	end
 
 	if Notify then
@@ -6406,20 +6410,20 @@ function Starlight:CreateWindow(WindowSettings)
 						Icon = number, **
 					}
 					]]
-
+								
 					local Element = {
 						Values = ElementSettings,
 						Class = "Label",
 						NestedElements = {},
 					}
-
+				
 					task.spawn(function()
 						local tooltip
-
+					
 						Element.Instance = GroupboxTemplateInstance.Label_TEMPLATE:Clone()
 						Element.Instance.Visible = true
 						Element.Instance.Parent = Groupbox.ParentingItem
-
+					
 						Element.Instance.Name = "LABEL_" .. Index
 						Element.Instance.Header.Text = Element.Values.Name
 						Element.Instance.Header.Icon.Visible = not String.IsEmptyOrNull(Element.Values.Icon)
@@ -6431,26 +6435,26 @@ function Starlight:CreateWindow(WindowSettings)
 						Element.Instance.Header.Icon.Image = not String.IsEmptyOrNull(Element.Values.Icon)
 							and "rbxassetid://" .. Element.Values.Icon
 							or ""
-
+					
 						ThemeMethods.bindTheme(Element.Instance.Header, "TextColor3", "Foregrounds.Light")
 						ThemeMethods.bindTheme(Element.Instance.Header.Icon, "ImageColor3", "Foregrounds.Light")
-
+					
 						tooltip = AddToolTip(Element.Values.Tooltip, Element.Instance)
-
+					
 						function Element:Set(NewElementSettings, NewIndex)
 							NewIndex = NewIndex or Index
-
+						
 							for i, v in pairs(Element.Values) do
 								if NewElementSettings[i] == nil then
 									NewElementSettings[i] = v
 								end
 							end
-
+						
 							ElementSettings = NewElementSettings
 							Index = NewIndex
-
+						
 							Element.Values = ElementSettings
-
+						
 							Element.Instance.Name = "LABEL_" .. NewIndex
 							Element.Instance.Header.Text = Element.Values.Name
 							Element.Instance.Header.Icon.Visible = not String.IsEmptyOrNull(Element.Values.Icon)
@@ -6462,13 +6466,13 @@ function Starlight:CreateWindow(WindowSettings)
 							Element.Instance.Header.Icon.Image = not String.IsEmptyOrNull(Element.Values.Icon)
 								and "rbxassetid://" .. Element.Values.Icon
 								or ""
-
+						
 							tooltip.Text = Element.Values.Tooltip or ""
-
+						
 							Starlight.Window.TabSections[Name].Tabs[TabIndex].Groupboxes[GroupIndex].Elements[Index].Values =
 								Element.Values
 						end
-
+					
 						function Element:Destroy()
 							Element.Instance:Destroy()
 							if Element.NestedElements ~= nil then
@@ -6478,19 +6482,23 @@ function Starlight:CreateWindow(WindowSettings)
 							end
 							Element = nil
 						end
-
+					
 						function Element:Lock(Reason)
 							Element.Instance.Lock_Overlay.Visible = true
 							Element.Instance.Interactable = false
 							Element.Instance.Lock_Overlay.Header.Text = Reason or ""
 						end
-
+					
 						function Element:Unlock()
 							Element.Instance.Lock_Overlay.Visible = false
 							Element.Instance.Interactable = true
 							Element.Instance.Lock_Overlay.Header.Text = ""
 						end
 					end)
+				
+					Starlight.Window.TabSections[Name].Tabs[TabIndex].Groupboxes[GroupIndex].Elements[Index] = Element
+					return Starlight.Window.TabSections[Name].Tabs[TabIndex].Groupboxes[GroupIndex].Elements[Index]
+				end
 
 					--// SUBSECTION : User Elements
 
@@ -7029,15 +7037,15 @@ function Starlight:CreateWindow(WindowSettings)
 							NestedElement.Instances[2].Name = "COLORPICKER_" .. NestedIndex
 
 							acrylicEvent.Event:Connect(function()
-								if mainAcrylic then
-									NestedElement.Instances[2].BackgroundTransparency = 0.5
-								else
-									NestedElement.Instances[2].BackgroundTransparency = 0
-								end
-							end)
-							local AcrylicObject = Acrylic.AcrylicPaint()
-							AcrylicObject.AddParent(NestedElement.Instances[2])
-							AcrylicObject.Frame.Parent = NestedElement.Instances[2]
+                            	if mainAcrylic then
+                            		NestedElement.Instances[2].BackgroundTransparency = 0.5
+                            	else
+                            		NestedElement.Instances[2].BackgroundTransparency = 0
+                            	end
+                            end)
+                            NestedElement.AcrylicObject = Acrylic.AcrylicPaint()
+                            NestedElement.AcrylicObject.AddParent(NestedElement.Instances[2])
+                            NestedElement.AcrylicObject.Frame.Parent = NestedElement.Instances[2]
 
 							local function close()
 								Starlight.OpenColorPicker = nil -- Clear the tracker when closing
@@ -7060,18 +7068,18 @@ function Starlight:CreateWindow(WindowSettings)
 								end
 
 								NestedElement.Instances[2].Container.Visible = false
-								NestedElement.Instances[2].TabSelector.Visible = false
-								NestedElement.Instances[2].Buttons.Visible = false
+                            	NestedElement.Instances[2].TabSelector.Visible = false
+                            	NestedElement.Instances[2].Buttons.Visible = false
 
-								Tween(NestedElement.Instances[2], { Size = UDim2.fromOffset(0, 0) }, function()
-									if NestedElement and NestedElement.Instances ~= nil then
-										NestedElement.Instances[2].Visible = false
-										if acrylicFlag and AcrylicObject and AcrylicObject.Model then
-											AcrylicObject.Model.Transparency = 1
-										end
-									end
-								end, Tween.Info(nil, nil, 0.24))
-
+                            	Tween(NestedElement.Instances[2], { Size = UDim2.fromOffset(0, 0) }, function()
+                            		if NestedElement and NestedElement.Instances ~= nil then
+                            			NestedElement.Instances[2].Visible = false
+                            			if acrylicFlag and NestedElement.AcrylicObject and NestedElement.AcrylicObject.Model then
+                            				NestedElement.AcrylicObject.Model.Transparency = 1
+                            			end
+                            		end
+                            	end, Tween.Info(nil, nil, 0.24))
+                            
 								NestedElement.Instances[2].Container.Color.OldColor.Frame.BackgroundColor3 =
 									NestedElement.Values.CurrentValue
 								NestedElement.Instances[2].Container.Color.OldColor.Frame.BackgroundTransparency = NestedElement.Values.Transparency
@@ -7094,9 +7102,9 @@ function Starlight:CreateWindow(WindowSettings)
 									NestedElement.Instances[2].Container.Visible = true
 									NestedElement.Instances[2].TabSelector.Visible = true
 									NestedElement.Instances[2].Buttons.Visible = true
-									if acrylicFlag then
-										AcrylicObject.Model.Transparency = 0.98
-									end
+									if acrylicFlag and NestedElement.AcrylicObject and NestedElement.AcrylicObject.Model then
+                                    	NestedElement.AcrylicObject.Model.Transparency = 0.98
+                                    end
 									local connection
 									connection = UserInputService.InputBegan:Connect(function(i)
 										if i.UserInputType ~= Enum.UserInputType.MouseButton1 then
@@ -8000,9 +8008,9 @@ function Starlight:CreateWindow(WindowSettings)
 									NestedElement.Instances[2].BackgroundTransparency = 0
 								end
 							end)
-							local AcrylicObject = Acrylic.AcrylicPaint()
-							AcrylicObject.AddParent(NestedElement.Instances[2])
-							AcrylicObject.Frame.Parent = NestedElement.Instances[2]
+							NestedElement.AcrylicObject = Acrylic.AcrylicPaint()
+                            NestedElement.AcrylicObject.AddParent(NestedElement.Instances[2])
+                            NestedElement.AcrylicObject.Frame.Parent = NestedElement.Instances[2]
 
 							local function updPos()
 								if
@@ -8023,20 +8031,22 @@ function Starlight:CreateWindow(WindowSettings)
 								end
 							end
 							local function close()
-								Tween(
-									NestedElement.Instances[2].List,
-									{ Size = UDim2.new(1, 0, 0, 0) },
-									nil,
-									Tween.Info(nil, nil, 0.18)
-								)
+                            	Starlight.OpenDropdown = nil -- Clear the tracker when closing
+                                                        
+                            	Tween(
+                            		NestedElement.Instances[2].List,
+                            		{ Size = UDim2.new(1, 0, 0, 0) },
+                            		nil,
+                            		Tween.Info(nil, nil, 0.18)
+                            	)
 								Tween(
 									NestedElement.Instances[2],
 									{ Size = UDim2.fromOffset(NestedElement.Instances[2].Size.X.Offset, 0) },
 									function()
 										if NestedElement and NestedElement.Instances ~= nil then
 											NestedElement.Instances[2].Visible = false
-											if acrylicFlag and AcrylicObject and AcrylicObject.Model then
-												AcrylicObject.Model.Transparency = 1
+											if acrylicFlag and NestedElement.AcrylicObject and NestedElement.AcrylicObject.Model then
+                                            	NestedElement.AcrylicObject.Model.Transparency = 1
 											end
 										end
 									end,
@@ -8058,58 +8068,57 @@ function Starlight:CreateWindow(WindowSettings)
 							end)
 
 							NestedElement.Instances[1].Interact.MouseButton1Click:Connect(function()
-								if NestedElement.Instances[2].Visible then
-									close()
-								else
-									-- Close any other open color picker
-									if Starlight.OpenColorPicker and Starlight.OpenColorPicker ~= NestedElement then
-										pcall(function()
-											if Starlight.OpenColorPicker.Instances[2].Visible then
-												-- Close the other color picker
-												local otherCP = Starlight.OpenColorPicker
-												Tween(
-													otherCP.Instances[2].List,
-													{ Size = UDim2.new(1, 0, 0, 0) },
-													nil,
-													Tween.Info(nil, nil, 0.18)
-												)
-												Tween(
-													otherCP.Instances[2],
-													{ Size = UDim2.fromOffset(otherCP.Instances[2].Size.X.Offset, 0) },
-													function()
-														if otherCP and otherCP.Instances ~= nil then
-															otherCP.Instances[2].Visible = false
-															if acrylicFlag and AcrylicObject and AcrylicObject.Model then
-																AcrylicObject.Model.Transparency = 1
-															end
-														end
-													end,
-													Tween.Info(nil, nil, 0.18)
-												)
-												otherCP.Instances[2].Container.Color.OldColor.Frame.BackgroundColor3 =
-													otherCP.Values.CurrentValue
-												otherCP.Instances[2].Container.Color.OldColor.Frame.BackgroundTransparency = otherCP.Values.Transparency
-													or 0
-											end
-										end)
-									end
-
-									-- Set this as the currently open color picker
-									Starlight.OpenColorPicker = NestedElement
+	                            if NestedElement.Instances[2].Visible then
+	                            	close()
+	                            else
+	                            	-- Close any other open dropdown
+	                            	if Starlight.OpenDropdown and Starlight.OpenDropdown ~= NestedElement then
+	                            		pcall(function()
+	                            			if Starlight.OpenDropdown.Instances[2].Visible then
+	                            				-- Close the other dropdown
+	                            				local otherDD = Starlight.OpenDropdown
+	                            				Tween(
+	                            					otherDD.Instances[2].List,
+	                            					{ Size = UDim2.new(1, 0, 0, 0) },
+	                            					nil,
+	                            					Tween.Info(nil, nil, 0.18)
+	                            				)
+	                            				Tween(
+	                            					otherDD.Instances[2],
+	                            					{ Size = UDim2.fromOffset(otherDD.Instances[2].Size.X.Offset, 0) },
+	                            					function()
+	                            						if otherDD and otherDD.Instances ~= nil then
+	                            							otherDD.Instances[2].Visible = false
+	                            							if acrylicFlag and otherDD.AcrylicObject and otherDD.AcrylicObject.Model then
+	                            								otherDD.AcrylicObject.Model.Transparency = 1
+	                            							end
+	                            						end
+	                            					end,
+	                            					Tween.Info(nil, nil, 0.18)
+	                            				)
+	                            			end
+	                            		end)
+	                            	end
+                                
+	                            	-- Set this as the currently open dropdown
+	                            	Starlight.OpenDropdown = NestedElement
 
 									NestedElement.Instances[2].Visible = true
-									Tween(
-										NestedElement.Instances[2],
-										{ Size = UDim2.fromOffset(320, 245) },
-										nil,
-										Tween.Info(nil, nil, 0.18)
-									)
-									NestedElement.Instances[2].Container.Visible = true
-									NestedElement.Instances[2].TabSelector.Visible = true
-									NestedElement.Instances[2].Buttons.Visible = true
-									if acrylicFlag then
-										AcrylicObject.Model.Transparency = 0.98
-									end
+                                    Tween(
+                                        NestedElement.Instances[2],
+                                        { Size = UDim2.fromOffset(NestedElement.Instances[2].Size.X.Offset, height) },
+                                        nil,
+                                        Tween.Info(nil, nil, 0.18)
+                                    )
+                                    Tween(
+                                        NestedElement.Instances[2].List,
+                                        { Size = UDim2.new(1, 0, 1, 0) },
+                                        nil,
+                                        Tween.Info(nil, nil, 0.18)
+                                    )
+									if acrylicFlag and NestedElement.AcrylicObject and NestedElement.AcrylicObject.Model then
+                                    	NestedElement.AcrylicObject.Model.Transparency = 0.98
+                                    end
 									local connection
 									connection = UserInputService.InputBegan:Connect(function(i)
 										if i.UserInputType ~= Enum.UserInputType.MouseButton1 then
