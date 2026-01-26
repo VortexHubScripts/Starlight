@@ -6410,20 +6410,20 @@ function Starlight:CreateWindow(WindowSettings)
 						Icon = number, **
 					}
 					]]
-
+								
 					local Element = {
 						Values = ElementSettings,
 						Class = "Label",
 						NestedElements = {},
 					}
-
+				
 					task.spawn(function()
 						local tooltip
-
+					
 						Element.Instance = GroupboxTemplateInstance.Label_TEMPLATE:Clone()
 						Element.Instance.Visible = true
 						Element.Instance.Parent = Groupbox.ParentingItem
-
+					
 						Element.Instance.Name = "LABEL_" .. Index
 						Element.Instance.Header.Text = Element.Values.Name
 						Element.Instance.Header.Icon.Visible = not String.IsEmptyOrNull(Element.Values.Icon)
@@ -6435,26 +6435,26 @@ function Starlight:CreateWindow(WindowSettings)
 						Element.Instance.Header.Icon.Image = not String.IsEmptyOrNull(Element.Values.Icon)
 							and "rbxassetid://" .. Element.Values.Icon
 							or ""
-
+					
 						ThemeMethods.bindTheme(Element.Instance.Header, "TextColor3", "Foregrounds.Light")
 						ThemeMethods.bindTheme(Element.Instance.Header.Icon, "ImageColor3", "Foregrounds.Light")
-
+					
 						tooltip = AddToolTip(Element.Values.Tooltip, Element.Instance)
-
+					
 						function Element:Set(NewElementSettings, NewIndex)
 							NewIndex = NewIndex or Index
-
+						
 							for i, v in pairs(Element.Values) do
 								if NewElementSettings[i] == nil then
 									NewElementSettings[i] = v
 								end
 							end
-
+						
 							ElementSettings = NewElementSettings
 							Index = NewIndex
-
+						
 							Element.Values = ElementSettings
-
+						
 							Element.Instance.Name = "LABEL_" .. NewIndex
 							Element.Instance.Header.Text = Element.Values.Name
 							Element.Instance.Header.Icon.Visible = not String.IsEmptyOrNull(Element.Values.Icon)
@@ -6466,13 +6466,13 @@ function Starlight:CreateWindow(WindowSettings)
 							Element.Instance.Header.Icon.Image = not String.IsEmptyOrNull(Element.Values.Icon)
 								and "rbxassetid://" .. Element.Values.Icon
 								or ""
-
+						
 							tooltip.Text = Element.Values.Tooltip or ""
-
+						
 							Starlight.Window.TabSections[Name].Tabs[TabIndex].Groupboxes[GroupIndex].Elements[Index].Values =
 								Element.Values
 						end
-
+					
 						function Element:Destroy()
 							Element.Instance:Destroy()
 							if Element.NestedElements ~= nil then
@@ -6482,19 +6482,23 @@ function Starlight:CreateWindow(WindowSettings)
 							end
 							Element = nil
 						end
-
+					
 						function Element:Lock(Reason)
 							Element.Instance.Lock_Overlay.Visible = true
 							Element.Instance.Interactable = false
 							Element.Instance.Lock_Overlay.Header.Text = Reason or ""
 						end
-
+					
 						function Element:Unlock()
 							Element.Instance.Lock_Overlay.Visible = false
 							Element.Instance.Interactable = true
 							Element.Instance.Lock_Overlay.Header.Text = ""
 						end
 					end)
+				
+					Starlight.Window.TabSections[Name].Tabs[TabIndex].Groupboxes[GroupIndex].Elements[Index] = Element
+					return Starlight.Window.TabSections[Name].Tabs[TabIndex].Groupboxes[GroupIndex].Elements[Index]
+				end
 
 					--// SUBSECTION : User Elements
 
