@@ -1543,7 +1543,7 @@ local function AddToolTip(InfoStr, HoverInstance)
 			end
 		end)
 
-		RunService.RenderStepped:Connect(function(dt)
+		RunService.Heartbeat:Connect(function(dt)
 			if not IsHovering then
 				return
 			end
@@ -1558,7 +1558,6 @@ local function AddToolTip(InfoStr, HoverInstance)
 				if hoverTime >= threshold then
 					updateTooltipPos()
 					if not String.IsEmptyOrNull(label.Text) then
-						RunService.RenderStepped:Wait()
 						tooltip.Visible = true
 					end
 				end
@@ -1963,10 +1962,14 @@ function Starlight:Notification(data)
 		end
 
 		task.spawn(function() end)
+		local _lastNotifTimeUpdate = 0
 		table.insert(
 			connections,
 			RunService.RenderStepped:Connect(function()
-				pcall(setDuration, tick() - creationTime)
+				local now = tick()
+				if now - _lastNotifTimeUpdate < 1 then return end -- Update "Xs ago" text once per second, not 60x/sec
+				_lastNotifTimeUpdate = now
+				pcall(setDuration, now - creationTime)
 			end)
 		)
 
@@ -2416,10 +2419,11 @@ function Starlight:CreateWindow(WindowSettings)
 			end
 		end
 
-		mainWindow.Sidebar.Player.PlayerIcon.Image =
-			Players:GetUserThumbnailAsync(Player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48)
-		mainWindow.Sidebar.Player.Header.Text = Player.DisplayName
-		mainWindow.Sidebar.Player.subheader.Text = Player.Name
+		--mainWindow.Sidebar.Player.PlayerIcon.Image =
+		--	Players:GetUserThumbnailAsync(Player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48)
+		--mainWindow.Sidebar.Player.Header.Text = Player.DisplayName
+		--mainWindow.Sidebar.Player.subheader.Text = Player.Name
+		mainWindow.Sidebar.Player.Visible = false
 
 		ContentProvider:PreloadAsync({
 			"rbxassetid://116767744785553", -- cursor
@@ -2463,10 +2467,10 @@ function Starlight:CreateWindow(WindowSettings)
 			end
 			ThemeMethods.bindTheme(mainWindow.Sidebar.DropShadowHolder.DropShadow, "ImageColor3", "Foregrounds.Dark")
 			ThemeMethods.bindTheme(mainWindow.Sidebar.Header, "TextColor3", "Foregrounds.Light")
-			ThemeMethods.bindTheme(mainWindow.Sidebar.Player.PlayerIcon, "BackgroundColor3", "Backgrounds.Groupbox")
-			ThemeMethods.bindTheme(mainWindow.Sidebar.Player.Header, "TextColor3", "Foregrounds.Light")
-			ThemeMethods.bindTheme(mainWindow.Sidebar.Player.Header.Icon.Accent, "Color", "Accents.Main")
-			ThemeMethods.bindTheme(mainWindow.Sidebar.Player.subheader, "TextColor3", "Foregrounds.Medium")
+			--ThemeMethods.bindTheme(mainWindow.Sidebar.Player.PlayerIcon, "BackgroundColor3", "Backgrounds.Groupbox")
+			--ThemeMethods.bindTheme(mainWindow.Sidebar.Player.Header, "TextColor3", "Foregrounds.Light")
+			--ThemeMethods.bindTheme(mainWindow.Sidebar.Player.Header.Icon.Accent, "Color", "Accents.Main")
+			--ThemeMethods.bindTheme(mainWindow.Sidebar.Player.subheader, "TextColor3", "Foregrounds.Medium")
 			ThemeMethods.bindTheme(mainWindow.Content.Topbar, "BackgroundColor3", "Backgrounds.Medium")
 			for _, cornerrepair in pairs(mainWindow.Content.Topbar.CornerRepairs:GetChildren()) do
 				ThemeMethods.bindTheme(cornerrepair, "ImageColor3", "Backgrounds.Medium")
