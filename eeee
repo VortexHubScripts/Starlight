@@ -173,8 +173,10 @@ local Color = {}
 local Tween = {}
 setmetatable(Tween, {
 	__call = function(self, object: Instance, goal: table, callback, tweenin)
-		local tween = TweenService:Create(object, tweenin or Tween.Info(), goal)
-		tween.Completed:Connect(callback or function() end)
+		local tween = TweenService:Create(object, tweenin or _defaultTweenInfo or Tween.Info(), goal)
+		if callback then
+			tween.Completed:Connect(callback)
+		end
 		tween:Play()
 	end,
 })
@@ -921,7 +923,11 @@ Starlight.CurrentTheme = deepCopy(Themes.Starlight)
 
 --//ENDSUBSECTION
 
+local _defaultTweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out)
 function Tween.Info(style: string?, direction: string?, time: number?)
+	if style == nil and direction == nil and time == nil then
+		return _defaultTweenInfo
+	end
 	style = style or "Exponential"
 	direction = direction or "Out"
 	time = time or 0.5
@@ -1280,6 +1286,7 @@ local function BlurModule(Frame : Frame)
 		rebuildPartsList()
 
 		game:GetService("RunService"):BindToRenderStep("...", Enum.RenderPriority.Camera.Value + 1, function()
+			if Starlight.Minimized then return end -- Skip blur updates when UI is hidden
 			blurPart.CFrame = Camera.CFrame
 			BlurredGui.updateAll()
 		end)
@@ -1402,17 +1409,11 @@ local function Hide(Interface, JustHide: boolean?, Notify: boolean?, Bind: strin
 		Interface.Visible = false
 	end
 
-	-- hide popups - ONLY when hiding the main window (when Notify parameter is used)
-	-- This prevents forced clicks when notifications are created
-	if Notify then
-		if not isStudio and Starlight.Instance.MobileToggle.Visible then
-			InputManager:SendTouchEvent(0, 0, 0, 0)
-			InputManager:SendTouchEvent(0, 2, 0, 0)
-		elseif not isStudio then
-			InputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
-			InputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
-		end
-	end
+	-- FIX: Removed InputManager mouse/touch events that were causing
+	-- unintended left clicks when hiding the UI via keybind.
+	-- The original code fired a fake click to dismiss popups, but this
+	-- also triggered in-game actions (attacking, etc).
+	-- Popups are now dismissed by hiding them directly instead.
 
 	if Notify then
 		if Starlight.Instance.MobileToggle.Visible then
@@ -1547,15 +1548,23 @@ local function AddToolTip(InfoStr, HoverInstance)
 			if not IsHovering then
 				return
 			end
-
-			local currentPos = Vector2.new(Mouse.X, Mouse.Y)
-			if (currentPos - lastMousePos).magnitude > 0 then
-				tooltip.Visible = false
-				hoverTime = 0
-				lastMousePos = currentPos
+			
+			-- Only check mouse position at a reduced rate to save perf
+			hoverTime += dt
+			if hoverTime < threshold then
+				local currentPos = Vector2.new(Mouse.X, Mouse.Y)
+				if (currentPos - lastMousePos).Magnitude > 0 then
+					tooltip.Visible = false
+					hoverTime = 0
+					lastMousePos = currentPos
+				end
 			else
-				hoverTime += dt
-				if hoverTime >= threshold then
+				local currentPos = Vector2.new(Mouse.X, Mouse.Y)
+				if (currentPos - lastMousePos).Magnitude > 0 then
+					tooltip.Visible = false
+					hoverTime = 0
+					lastMousePos = currentPos
+				else
 					updateTooltipPos()
 					if not String.IsEmptyOrNull(label.Text) then
 						tooltip.Visible = true
@@ -1586,33 +1595,30 @@ local function makeDraggable(Bar, Window: Frame, dragBar, enableTaptic, tapticOf
 		local dragInteract = dragBar and dragBar.Interact
 		local dragBarCosmetic = dragBar and dragBar.DragCosmetic
 
-		local function connectMethods()
-			if dragBar and enableTaptic then
-				dragBar.MouseEnter:Connect(function()
-					if not Dragging then
-						Tween(
-							dragBarCosmetic,
-							{ BackgroundTransparency = 0.5, Size = UDim2.new(0, 120, 0, 4) },
-							nil,
-							TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-						)
-					end
-				end)
+		-- Connect hover methods ONCE instead of every drag end (was leaking connections)
+		if dragBar and enableTaptic then
+			dragBar.MouseEnter:Connect(function()
+				if not Dragging then
+					Tween(
+						dragBarCosmetic,
+						{ BackgroundTransparency = 0.5, Size = UDim2.new(0, 120, 0, 4) },
+						nil,
+						TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+					)
+				end
+			end)
 
-				dragBar.MouseLeave:Connect(function()
-					if not Dragging then
-						Tween(
-							dragBarCosmetic,
-							{ BackgroundTransparency = 0.7, Size = UDim2.new(0, 100, 0, 4) },
-							nil,
-							TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-						)
-					end
-				end)
-			end
+			dragBar.MouseLeave:Connect(function()
+				if not Dragging then
+					Tween(
+						dragBarCosmetic,
+						{ BackgroundTransparency = 0.7, Size = UDim2.new(0, 100, 0, 4) },
+						nil,
+						TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+					)
+				end
+			end)
 		end
-
-		connectMethods()
 
 		Bar.InputBegan:Connect(function(Input)
 			if
@@ -1635,7 +1641,6 @@ local function makeDraggable(Bar, Window: Frame, dragBar, enableTaptic, tapticOf
 				Input.Changed:Connect(function()
 					if Input.UserInputState == Enum.UserInputState.End then
 						Dragging = false
-						connectMethods()
 
 						if enableTaptic then
 							Tween(
@@ -1965,7 +1970,7 @@ function Starlight:Notification(data)
 		local _lastNotifTimeUpdate = 0
 		table.insert(
 			connections,
-			RunService.RenderStepped:Connect(function()
+			RunService.Heartbeat:Connect(function()
 				local now = tick()
 				if now - _lastNotifTimeUpdate < 1 then return end -- Update "Xs ago" text once per second, not 60x/sec
 				_lastNotifTimeUpdate = now
@@ -3112,7 +3117,12 @@ function Starlight:CreateWindow(WindowSettings)
 			Players:GetUserThumbnailAsync(Player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
 
 		task.spawn(function()
+			local _lastClockUpdate = 0
 			connections.__homeTabTime = RunService.RenderStepped:Connect(function()
+				local now = tick()
+				if now - _lastClockUpdate < 1 then return end
+				_lastClockUpdate = now
+				
 				local t = os.date("*t")
 				local hour = t.hour
 
@@ -3273,6 +3283,7 @@ function Starlight:CreateWindow(WindowSettings)
 			end
 		end
 
+		local _lastHeartbeatTextUpdate = 0
 		local function HeartbeatUpdate()
 			LastIteration = TimeFunction()
 			for Index = #FrameUpdateTable, 1, -1 do
@@ -3281,6 +3292,12 @@ function Starlight:CreateWindow(WindowSettings)
 			end
 
 			FrameUpdateTable[1] = LastIteration
+			
+			-- Only update the UI text twice per second instead of every frame
+			local now = tick()
+			if now - _lastHeartbeatTextUpdate < 0.5 then return end
+			_lastHeartbeatTextUpdate = now
+			
 			Tab.Instances.Page.Holder.Left.Server.Frame.latency.Text =
 				`<font size="14" color="#FFF" weight="semibold">Latency</font>\n{tostring(
 					math.floor(
@@ -7566,6 +7583,7 @@ function Starlight:CreateWindow(WindowSettings)
 								)
 
 								RunService.RenderStepped:Connect(function()
+									if not mainDragging and not sliderDragging and not transDragging then return end
 									if mainDragging then
 										local localX = math.clamp(
 											Mouse.X
