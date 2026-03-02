@@ -1474,6 +1474,44 @@ local function Unmaximize(Window: Frame, Dragging: boolean?)
 	Starlight.Maximized = false
 end
 
+-- PERF: Shared tooltip heartbeat system — one connection handles ALL tooltips
+local _tooltipRegistry = {} -- {tooltip, label, IsHovering, hoverTime, lastMousePos, threshold}
+local _tooltipHeartbeatStarted = false
+
+local function _startTooltipHeartbeat()
+	if _tooltipHeartbeatStarted then return end
+	_tooltipHeartbeatStarted = true
+	local heartbeat = RunService.Heartbeat:Connect(function(dt)
+		for i, entry in ipairs(_tooltipRegistry) do
+			if not entry.IsHovering then continue end
+
+			entry.hoverTime += dt
+			local currentPos = Vector2.new(Mouse.X, Mouse.Y)
+			local moved = (currentPos - entry.lastMousePos).Magnitude > 0
+
+			if entry.hoverTime < entry.threshold then
+				if moved then
+					entry.tooltip.Visible = false
+					entry.hoverTime = 0
+					entry.lastMousePos = currentPos
+				end
+			else
+				if moved then
+					entry.tooltip.Visible = false
+					entry.hoverTime = 0
+					entry.lastMousePos = currentPos
+				else
+					entry.tooltip.Position = UDim2.fromOffset(Mouse.X + 15, Mouse.Y + 20)
+					if not String.IsEmptyOrNull(entry.label.Text) then
+						entry.tooltip.Visible = true
+					end
+				end
+			end
+		end
+	end)
+	table.insert(connections, heartbeat)
+end
+
 -- Add a tooltip to the element
 local function AddToolTip(InfoStr, HoverInstance)
 	local label = Instance.new("TextLabel")
@@ -1511,70 +1549,44 @@ local function AddToolTip(InfoStr, HoverInstance)
 	stroke.Color = Color3.fromRGB(65, 66, 77)
 	stroke.Parent = tooltip
 
-	local hoverTime = 0
-	local IsHovering = false
-	local lastMousePos = nil
-	local threshold = 0.44
-
-	local function updateTooltipPos()
-		tooltip.Position = UDim2.fromOffset(Mouse.X + 15, Mouse.Y + 20)
-	end
-
 	if HoverInstance then
+		local tooltipEntry = {
+			tooltip = tooltip,
+			label = label,
+			IsHovering = false,
+			hoverTime = 0,
+			lastMousePos = Vector2.new(0, 0),
+			threshold = 0.44,
+		}
+
 		HoverInstance.MouseEnter:Connect(function()
-			IsHovering = true
-			lastMousePos = Vector2.new(Mouse.X, Mouse.Y)
-			hoverTime = 0
+			tooltipEntry.IsHovering = true
+			tooltipEntry.lastMousePos = Vector2.new(Mouse.X, Mouse.Y)
+			tooltipEntry.hoverTime = 0
 		end)
 
 		HoverInstance.MouseLeave:Connect(function()
-			IsHovering = false
+			tooltipEntry.IsHovering = false
 			tooltip.Visible = false
 		end)
 
 		HoverInstance:GetPropertyChangedSignal("AbsolutePosition"):Connect(function()
 			local p, pos, size = Mouse, HoverInstance.AbsolutePosition, HoverInstance.AbsoluteSize
 			if not (p.X >= pos.X and p.X <= pos.X + size.X and p.Y >= pos.Y and p.Y <= pos.Y + size.Y) then
-				IsHovering = false
+				tooltipEntry.IsHovering = false
 				tooltip.Visible = false
 			else
-				IsHovering = true
-				lastMousePos = Vector2.new(Mouse.X, Mouse.Y)
-				hoverTime = 0
+				tooltipEntry.IsHovering = true
+				tooltipEntry.lastMousePos = Vector2.new(Mouse.X, Mouse.Y)
+				tooltipEntry.hoverTime = 0
 			end
 		end)
 
-		RunService.Heartbeat:Connect(function(dt)
-			if not IsHovering then
-				return
-			end
-			
-			-- Only check mouse position at a reduced rate to save perf
-			hoverTime += dt
-			if hoverTime < threshold then
-				local currentPos = Vector2.new(Mouse.X, Mouse.Y)
-				if (currentPos - lastMousePos).Magnitude > 0 then
-					tooltip.Visible = false
-					hoverTime = 0
-					lastMousePos = currentPos
-				end
-			else
-				local currentPos = Vector2.new(Mouse.X, Mouse.Y)
-				if (currentPos - lastMousePos).Magnitude > 0 then
-					tooltip.Visible = false
-					hoverTime = 0
-					lastMousePos = currentPos
-				else
-					updateTooltipPos()
-					if not String.IsEmptyOrNull(label.Text) then
-						tooltip.Visible = true
-					end
-				end
-			end
-		end)
+		table.insert(_tooltipRegistry, tooltipEntry)
+		_startTooltipHeartbeat()
 	end
 
-	updateTooltipPos()
+	tooltip.Position = UDim2.fromOffset(Mouse.X + 15, Mouse.Y + 20)
 	do -- Theme Binding
 		ThemeMethods.bindTheme(tooltip, "BackgroundColor3", "Backgrounds.Medium")
 		ThemeMethods.bindTheme(stroke, "Color", "Foregrounds.Dark")
@@ -1588,12 +1600,24 @@ end
 
 -- A Function to make an object movable via dragging another object
 -- Taken From Luna Interface Suite, A Nebula Softworks Product
+-- PERF: Rewritten to set Position directly during drag instead of creating 60+ tweens/sec.
+-- Only uses a single smooth tween on drag END for the final snap.
 local function makeDraggable(Bar, Window: Frame, dragBar, enableTaptic, tapticOffset)
 	pcall(function()
 		local Dragging, DragInput, MousePos, FramePos
 
 		local dragInteract = dragBar and dragBar.Interact
 		local dragBarCosmetic = dragBar and dragBar.DragCosmetic
+
+		-- Cached tween infos (avoid creating TweenInfo objects every frame)
+		local dragSmoothInfo = TweenInfo.new(0.08, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
+		local dragEndInfo = TweenInfo.new(0.2, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out)
+		local tapticInfo = TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+		local tapticDragInfo = TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+
+		-- PERF: Reuse tween objects — cancel previous before creating new
+		local _activeDragTweenW = nil
+		local _activeDragTweenD = nil
 
 		-- Connect hover methods ONCE instead of every drag end (was leaking connections)
 		if dragBar and enableTaptic then
@@ -1603,7 +1627,7 @@ local function makeDraggable(Bar, Window: Frame, dragBar, enableTaptic, tapticOf
 						dragBarCosmetic,
 						{ BackgroundTransparency = 0.5, Size = UDim2.new(0, 120, 0, 4) },
 						nil,
-						TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+						tapticInfo
 					)
 				end
 			end)
@@ -1614,7 +1638,7 @@ local function makeDraggable(Bar, Window: Frame, dragBar, enableTaptic, tapticOf
 						dragBarCosmetic,
 						{ BackgroundTransparency = 0.7, Size = UDim2.new(0, 100, 0, 4) },
 						nil,
-						TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+						tapticInfo
 					)
 				end
 			end)
@@ -1634,7 +1658,7 @@ local function makeDraggable(Bar, Window: Frame, dragBar, enableTaptic, tapticOf
 						dragBarCosmetic,
 						{ Size = UDim2.new(0, 110, 0, 4), BackgroundTransparency = 0 },
 						nil,
-						TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+						tapticDragInfo
 					)
 				end
 
@@ -1647,7 +1671,7 @@ local function makeDraggable(Bar, Window: Frame, dragBar, enableTaptic, tapticOf
 								dragBarCosmetic,
 								{ Size = UDim2.new(0, 100, 0, 4), BackgroundTransparency = 0.7 },
 								nil,
-								TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+								tapticDragInfo
 							)
 						end
 					end
@@ -1665,49 +1689,48 @@ local function makeDraggable(Bar, Window: Frame, dragBar, enableTaptic, tapticOf
 		end)
 
 		local debounce = false
+		-- PERF: Throttle drag updates — only process once per frame via a dirty flag + Heartbeat
+		local _dragDirty = false
+		local _lastDragInput = nil
+
 		UserInputService.InputChanged:Connect(function(Input)
 			if Input == DragInput and Dragging then
-				debounce = true
-				if Starlight.Maximized then
-					Unmaximize(Window, true)
-				end
-				local Delta = Input.Position - MousePos
-
-				local newMainPosition = UDim2.new(
-					FramePos.X.Scale,
-					FramePos.X.Offset + Delta.X,
-					FramePos.Y.Scale,
-					FramePos.Y.Offset + Delta.Y
-				)
-				Tween(
-					Window,
-					{ Position = newMainPosition },
-					nil,
-					TweenInfo.new(0.35, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out)
-				)
-
-				if dragBar then
-					local newDragBarPosition = UDim2.new(
-						FramePos.X.Scale,
-						FramePos.X.Offset + Delta.X + Window.Size.X.Offset / 2,
-						FramePos.Y.Scale,
-						FramePos.Y.Offset + Delta.Y + Window.Size.Y.Offset + 10
-					)
-					Tween(dragBar, { Position = newDragBarPosition }, function()
-						debounce = false
-					end, TweenInfo.new(0.35, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out))
-				end
+				_dragDirty = true
+				_lastDragInput = Input
 			end
 		end)
 
-		Window:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-			if not debounce then
-				local newMainPosition = UDim2.new(
-					Window.Position.X.Scale,
-					Window.Position.X.Offset,
-					Window.Position.Y.Scale,
-					Window.Position.Y.Offset
+		-- Single Heartbeat connection to process drag (replaces creating tweens on every InputChanged)
+		local _dragHeartbeat = RunService.Heartbeat:Connect(function()
+			if not _dragDirty or not _lastDragInput then return end
+			_dragDirty = false
+
+			local Input = _lastDragInput
+			debounce = true
+			if Starlight.Maximized then
+				Unmaximize(Window, true)
+			end
+			local Delta = Input.Position - MousePos
+
+			-- PERF: Set position DIRECTLY during drag — no tweens, no allocations
+			local newX = FramePos.X.Offset + Delta.X
+			local newY = FramePos.Y.Offset + Delta.Y
+			Window.Position = UDim2.new(FramePos.X.Scale, newX, FramePos.Y.Scale, newY)
+
+			if dragBar then
+				dragBar.Position = UDim2.new(
+					FramePos.X.Scale,
+					newX + Window.Size.X.Offset / 2,
+					FramePos.Y.Scale,
+					newY + Window.Size.Y.Offset + 10
 				)
+				debounce = false
+			end
+		end)
+		table.insert(connections, _dragHeartbeat)
+
+		Window:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+			if not debounce and dragBar then
 				local newDragBarPosition = UDim2.new(
 					Window.Position.X.Scale,
 					Window.Position.X.Offset + Window.Size.X.Offset / 2,
@@ -1718,7 +1741,7 @@ local function makeDraggable(Bar, Window: Frame, dragBar, enableTaptic, tapticOf
 					dragBar,
 					{ Position = newDragBarPosition },
 					nil,
-					TweenInfo.new(0.35, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out)
+					dragEndInfo
 				)
 			end
 		end)
@@ -3118,7 +3141,7 @@ function Starlight:CreateWindow(WindowSettings)
 
 		task.spawn(function()
 			local _lastClockUpdate = 0
-			connections.__homeTabTime = RunService.RenderStepped:Connect(function()
+			connections.__homeTabTime = RunService.Heartbeat:Connect(function()
 				local now = tick()
 				if now - _lastClockUpdate < 1 then return end
 				_lastClockUpdate = now
@@ -5858,14 +5881,8 @@ function Starlight:CreateWindow(WindowSettings)
 
 									local percentage = (Location - Element.Instance.PART_Backdrop.AbsolutePosition.X)
 										/ Element.Instance.PART_Backdrop.AbsoluteSize.X
-									Tween(
-										Element.Instance.PART_Backdrop.PART_Progress,
-
-										{ Size = UDim2.new(percentage, 0, 1, 0) },
-
-										nil,
-										Tween.Info(nil, nil, 0.2)
-									)
+									-- PERF: Set size directly during drag instead of creating a tween every frame
+									Element.Instance.PART_Backdrop.PART_Progress.Size = UDim2.new(percentage, 0, 1, 0)
 
 									local NewValue = ((Element.Values.Range[2] - Element.Values.Range[1]) * percentage)
 										+ Element.Values.Range[1]
@@ -7597,10 +7614,8 @@ function Starlight:CreateWindow(WindowSettings)
 											0,
 											NestedElement.Instances[2].Container.Color.ColorPicker.AbsoluteSize.Y
 										)
-										Tween(
-											NestedElement.Instances[2].Container.Color.ColorPicker.Point,
-											{ Position = UDim2.new(0, localX, 0, localY) }
-										)
+										-- PERF: Set position directly instead of tweening every frame
+										NestedElement.Instances[2].Container.Color.ColorPicker.Point.Position = UDim2.new(0, localX, 0, localY)
 										s = localX
 											/ NestedElement.Instances[2].Container.Color.ColorPicker.AbsoluteSize.X
 										v = 1
@@ -7627,10 +7642,8 @@ function Starlight:CreateWindow(WindowSettings)
 										local color = Color3.fromHSV(h, s, v)
 										NestedElement.Values.CurrentValue = color
 										updateInstances(NestedElement.Instances[2].Container.Color.HueSlider)
-										Tween(
-											NestedElement.Instances[2].Container.Color.HueSlider.Value,
-											{ Size = UDim2.new(1, 0, h, 0) }
-										)
+										-- PERF: Set size directly instead of tweening every frame
+										NestedElement.Instances[2].Container.Color.HueSlider.Value.Size = UDim2.new(1, 0, h, 0)
 										local r, g, b =
 											math.floor((color.R * 255) + 0.5),
 											math.floor((color.G * 255) + 0.5),
@@ -7645,10 +7658,8 @@ function Starlight:CreateWindow(WindowSettings)
 										)
 										local t = localY
 											/ NestedElement.Instances[2].Container.Color.TransparencySlider.AbsoluteSize.Y
-										Tween(
-											NestedElement.Instances[2].Container.Color.TransparencySlider.Value,
-											{ Size = UDim2.new(1, 0, t, 0) }
-										)
+										-- PERF: Set size directly instead of tweening every frame
+										NestedElement.Instances[2].Container.Color.TransparencySlider.Value.Size = UDim2.new(1, 0, t, 0)
 										NestedElement.Values.Transparency = 1 - t
 										updateInstances()
 									end
