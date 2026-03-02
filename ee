@@ -1402,6 +1402,51 @@ local oldSizeX, oldSizeY, oldPosX, oldPosY
 local function Hide(Interface, JustHide: boolean?, Notify: boolean?, Bind: string?)
 	JustHide = JustHide or false
 
+	-- Close any open nested dropdown before hiding so it doesn't stay visible
+	if Starlight.OpenDropdown then
+		pcall(function()
+			if Starlight.OpenDropdown.Instances and Starlight.OpenDropdown.Instances[2] then
+				Starlight.OpenDropdown.Instances[2].Visible = false
+				if Starlight.OpenDropdown.Instances[2]:FindFirstChild("List") then
+					Starlight.OpenDropdown.Instances[2].List.Size = UDim2.new(1, 0, 0, 0)
+				end
+				Starlight.OpenDropdown.Instances[2].Size = UDim2.fromOffset(
+					Starlight.OpenDropdown.Instances[2].Size.X.Offset, 0
+				)
+				if acrylicFlag and Starlight.OpenDropdown.AcrylicObject and Starlight.OpenDropdown.AcrylicObject.Model then
+					Starlight.OpenDropdown.AcrylicObject.Model.Transparency = 1
+				end
+			end
+		end)
+		Starlight.OpenDropdown = nil
+	end
+
+	-- Close standalone dropdown popup overlay
+	pcall(function()
+		if Starlight.Instance and Starlight.Instance.MainWindow then
+			local popupOverlay = Starlight.Instance.MainWindow:FindFirstChild("Popup Overlay")
+			if popupOverlay then
+				popupOverlay.Visible = false
+				for _, child in pairs(popupOverlay:GetChildren()) do
+					if child:IsA("GuiObject") then
+						child.Visible = false
+					end
+				end
+			end
+		end
+	end)
+
+	-- Close nested dropdown popup overlay
+	pcall(function()
+		if Starlight.Instance and Starlight.Instance:FindFirstChild("PopupOverlay") then
+			for _, child in pairs(Starlight.Instance.PopupOverlay:GetChildren()) do
+				if child:IsA("GuiObject") then
+					child.Visible = false
+				end
+			end
+		end
+	end)
+
 	-- Simply disable the interface instead of animating transparency
 	if Interface.ClassName == "ScreenGui" then
 		Interface.Enabled = false
@@ -2737,6 +2782,25 @@ function Starlight:CreateWindow(WindowSettings)
 			mainWindow.Visible = true
 			StarlightUI.Drag.Visible = true
 			StarlightUI.MobileToggle.Visible = UserInputService.TouchEnabled
+
+			-- Apply "Hide UI On Start" preference
+			local shouldHideFromStart = WindowSettings.HiddenFromStart or false
+			if not isStudio then
+				pcall(function()
+					if isfile and isfile(Starlight.FileSystem.Folder .. "/ui_hidden_from_start.txt") then
+						local saved = readfile(Starlight.FileSystem.Folder .. "/ui_hidden_from_start.txt")
+						if saved == "true" then
+							shouldHideFromStart = true
+						end
+					end
+				end)
+			end
+			if shouldHideFromStart then
+				task.delay(0.1, function()
+					Hide(mainWindow, false, true, Starlight.WindowKeybind)
+					Hide(StarlightUI.Drag, false, false, Starlight.WindowKeybind)
+				end)
+			end
 		end)
 
 		makeDraggable(mainWindow.Content.Topbar, mainWindow, StarlightUI.Drag)
@@ -4703,6 +4767,68 @@ function Starlight:CreateWindow(WindowSettings)
 
 					function Element:Destroy()
 						Element.Instance:Destroy()
+						pcall(function() Element.Instances.Popup:Destroy() end)
+					end
+
+					function Element:Set(NewSettings)
+						for i, v in pairs(ElementSettings) do
+							if NewSettings[i] == nil then
+								NewSettings[i] = v
+							end
+						end
+						ElementSettings = NewSettings
+						Element.Values = ElementSettings
+
+						if ElementSettings.CurrentOption then
+							if type(ElementSettings.CurrentOption) == "string" then
+								ElementSettings.CurrentOption = {ElementSettings.CurrentOption}
+							end
+							if not ElementSettings.MultipleOptions and type(ElementSettings.CurrentOption) == "table" then
+								ElementSettings.CurrentOption = {ElementSettings.CurrentOption[1]}
+							end
+						else
+							ElementSettings.CurrentOption = {}
+						end
+
+						-- Clear old option instances
+						for _, child in pairs(Element.Instances.Popup.Content:GetChildren()) do
+							if child.ClassName == "Frame" and not string.find(child.Name, "Option_Template") and not string.find(child.Name, "Option_TEMPLATE") then
+								child:Destroy()
+							end
+						end
+
+						Refresh()
+
+						-- Re-apply selection visuals
+						if ElementSettings.CurrentOption and #ElementSettings.CurrentOption > 0 then
+							if not ElementSettings.MultipleOptions then
+								pcall(function() ActivateColorSingle(ElementSettings.CurrentOption[1]) end)
+							else
+								for _, v in pairs(ElementSettings.CurrentOption) do
+									pcall(function()
+										Tween(Element.Instances.Popup.Content[v], {BackgroundTransparency = 0.8})
+										Tween(Element.Instances.Popup.Content[v].Header, {TextColor3 = Color3.fromRGB(255,255,255)})
+										Element.Instances.Popup.Content[v].Header.Accent.Enabled = true
+										Element.Instances.Popup.Content[v].Icon.Accent.Enabled = true
+									end)
+								end
+							end
+						end
+
+						local Selected, ind = nil, 0
+						for i,v in pairs(ElementSettings.CurrentOption) do ind = ind + 1 end
+						if ind == 1 then Selected = ElementSettings.CurrentOption[1] else Selected = ElementSettings.CurrentOption end
+						CB(Selected)
+					end
+
+					function Element:UpdateOptions(newOptions, newCurrentOption)
+						ElementSettings.Options = newOptions
+						if newCurrentOption ~= nil then
+							ElementSettings.CurrentOption = type(newCurrentOption) == "string" and {newCurrentOption} or newCurrentOption
+						else
+							ElementSettings.CurrentOption = {}
+						end
+						Element:Set(ElementSettings)
 					end
 
 					Starlight.Window.TabSections[Name].Tabs[TabIndex].Groupboxes[GroupIndex].Elements[ElementSettings.Name] = Element
@@ -7028,6 +7154,16 @@ function Starlight:CreateWindow(WindowSettings)
 								Starlight.Window.TabSections[Name].Tabs[TabIndex].Groupboxes[GroupIndex].Elements[ParentIndex].NestedElements[NestedIndex].Values =
 									NestedElement.Values
 							end
+
+							function NestedElement:UpdateOptions(newOptions, newCurrentOption)
+								NestedElement.Values.Options = newOptions
+								if newCurrentOption ~= nil then
+									NestedElement.Values.CurrentOption = typeof(newCurrentOption) == "string" and {newCurrentOption} or newCurrentOption
+								else
+									NestedElement.Values.CurrentOption = {}
+								end
+								NestedElement:Set(NestedElement.Values)
+							end
 						end)
 
 						Starlight.Window.TabSections[Name].Tabs[TabIndex].Groupboxes[GroupIndex].Elements[ParentIndex].NestedElements[NestedIndex] =
@@ -8574,6 +8710,16 @@ function Starlight:CreateWindow(WindowSettings)
 								Starlight.Window.TabSections[Name].Tabs[TabIndex].Groupboxes[GroupIndex].Elements[ParentIndex].NestedElements[NestedIndex].Values =
 									NestedElement.Values
 							end
+
+							function NestedElement:UpdateOptions(newOptions, newCurrentOption)
+								NestedElement.Values.Options = newOptions
+								if newCurrentOption ~= nil then
+									NestedElement.Values.CurrentOption = typeof(newCurrentOption) == "string" and {newCurrentOption} or newCurrentOption
+								else
+									NestedElement.Values.CurrentOption = {}
+								end
+								NestedElement:Set(NestedElement.Values)
+							end
 						end)
 
 						Starlight.Window.TabSections[Name].Tabs[TabIndex].Groupboxes[GroupIndex].Elements[ParentIndex].NestedElements[NestedIndex] =
@@ -8838,6 +8984,40 @@ function Starlight:CreateWindow(WindowSettings)
 						notificationAcrylicEvent:Fire()
 					end,
 				}, "notitficationacrylic")
+
+				instance:CreateDivider()
+
+				local hiddenFromStartSaved = WindowSettings.HiddenFromStart or false
+				if not isStudio then
+					pcall(function()
+						if isfile and isfile(Starlight.FileSystem.Folder .. "/ui_hidden_from_start.txt") then
+							local saved = readfile(Starlight.FileSystem.Folder .. "/ui_hidden_from_start.txt")
+							if saved == "true" then
+								hiddenFromStartSaved = true
+							end
+						end
+					end)
+				end
+
+				instance:CreateToggle({
+					Name = "Hide UI On Start",
+					CurrentValue = hiddenFromStartSaved,
+					Tooltip = "When enabled, the UI will be hidden when the script loads. Press the keybind to show it.",
+					Icon = 87575513726659,
+					IgnoreConfig = true,
+					Callback = function(v)
+						WindowSettings.HiddenFromStart = v
+						-- Save preference to file
+						if not isStudio and writefile then
+							pcall(function()
+								if not isfolder(Starlight.FileSystem.Folder) then
+									makefolder(Starlight.FileSystem.Folder)
+								end
+								writefile(Starlight.FileSystem.Folder .. "/ui_hidden_from_start.txt", tostring(v))
+							end)
+						end
+					end,
+				}, "hiddenFromStart")
 
 				instance:CreateDivider()
 
