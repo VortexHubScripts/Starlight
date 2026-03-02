@@ -1402,6 +1402,33 @@ local oldSizeX, oldSizeY, oldPosX, oldPosY
 local function Hide(Interface, JustHide: boolean?, Notify: boolean?, Bind: string?)
 	JustHide = JustHide or false
 
+	-- Close any open dropdown before hiding the UI so it doesn't remain visible
+	if Starlight.OpenDropdown then
+		pcall(function()
+			local dd = Starlight.OpenDropdown
+			if dd.Instances and dd.Instances[2] then
+				dd.Instances[2].Visible = false
+				dd.Instances[2].Size = UDim2.fromOffset(dd.Instances[2].Size.X.Offset, 0)
+				dd.Instances[2].List.Size = UDim2.new(1, 0, 0, 0)
+				if acrylicFlag and dd.AcrylicObject and dd.AcrylicObject.Model then
+					dd.AcrylicObject.Model.Transparency = 1
+				end
+			end
+		end)
+		Starlight.OpenDropdown = nil
+	end
+
+	-- Close any open color picker before hiding
+	if Starlight.OpenColorPicker then
+		pcall(function()
+			local cp = Starlight.OpenColorPicker
+			if cp.Instances and cp.Instances[2] then
+				cp.Instances[2].Visible = false
+			end
+		end)
+		Starlight.OpenColorPicker = nil
+	end
+
 	-- Simply disable the interface instead of animating transparency
 	if Interface.ClassName == "ScreenGui" then
 		Interface.Enabled = false
@@ -2261,6 +2288,8 @@ function Starlight:CreateWindow(WindowSettings)
 			RememberJoins = bool, ****
 			Link = string ****
 		},
+		
+		HiddenFromStart = bool, ** -- If true, the UI starts hidden and must be toggled open with the keybind
 	}
 	
 	]]
@@ -2331,6 +2360,19 @@ function Starlight:CreateWindow(WindowSettings)
 	            local savedKey = readfile(keybindPath)
 	            if savedKey and savedKey ~= "" and savedKey ~= "No Bind" then
 	                Starlight.WindowKeybind = savedKey
+	            end
+	        end)
+	    end
+
+	    -- Load saved HiddenFromStart setting
+	    local hiddenPath = Starlight.FileSystem.Folder .. "/ui_hidden_from_start.txt"
+	    if isfile(hiddenPath) then
+	        pcall(function()
+	            local savedVal = readfile(hiddenPath)
+	            if savedVal == "true" then
+	                WindowSettings.HiddenFromStart = true
+	            elseif savedVal == "false" then
+	                WindowSettings.HiddenFromStart = false
 	            end
 	        end)
 	    end
@@ -2737,6 +2779,14 @@ function Starlight:CreateWindow(WindowSettings)
 			mainWindow.Visible = true
 			StarlightUI.Drag.Visible = true
 			StarlightUI.MobileToggle.Visible = UserInputService.TouchEnabled
+
+			-- Hide UI from start if WindowSettings.HiddenFromStart is true
+			if WindowSettings.HiddenFromStart then
+				task.delay(0.1, function()
+					Hide(mainWindow, false, true, Starlight.WindowKeybind)
+					Hide(StarlightUI.Drag, false, false, Starlight.WindowKeybind)
+				end)
+			end
 		end)
 
 		makeDraggable(mainWindow.Content.Topbar, mainWindow, StarlightUI.Drag)
@@ -5673,6 +5723,9 @@ function Starlight:CreateWindow(WindowSettings)
 						function module:Set(NewNestedSettings, NewNestedIndex)
 							NestedElement:Set(NewNestedSettings, NewNestedIndex)
 						end
+						function module:Update(NewOptions)
+							NestedElement:Update(NewOptions)
+						end
 						function module:Destroy()
 							NestedElement:Destroy()
 						end
@@ -8512,6 +8565,31 @@ function Starlight:CreateWindow(WindowSettings)
 								NestedElement = nil
 							end
 
+							-- Update refreshes the dropdown options list without changing settings.
+							-- Useful for dynamic lists (e.g. player lists) that need manual refresh.
+							function NestedElement:Update(NewOptions)
+								if NewOptions then
+									NestedElement.Values.Options = NewOptions
+								end
+								Refresh()
+								-- Re-activate any currently selected options that still exist
+								local preoptions = table.clone(NestedElement.Values.CurrentOption or {})
+								NestedElement.Values.CurrentOption = {}
+								task.delay(1 / 60, function()
+									for _, v in pairs(preoptions) do
+										for _, optioninstance in pairs(NestedElement.Instances[2].List:GetChildren()) do
+											if optioninstance.Name == "OPTION_" .. v then
+												ToggleOption(optioninstance)
+											end
+										end
+									end
+									NestedElement.Instances[1].Header.Text =
+										Table.Unpack(NestedElement.Values.CurrentOption)
+									NestedElement.Instances[1].Header.PlaceholderText = NestedElement.Values.Placeholder
+										or "--"
+								end)
+							end
+
 							function NestedElement:Set(NewNestedSettings, NewNestedIndex)
 								NewNestedIndex = NewNestedIndex or NestedIndex
 
@@ -8838,6 +8916,32 @@ function Starlight:CreateWindow(WindowSettings)
 						notificationAcrylicEvent:Fire()
 					end,
 				}, "notitficationacrylic")
+
+				instance:CreateToggle({
+					Name = "Hidden From Start",
+					CurrentValue = WindowSettings.HiddenFromStart or false,
+					Tooltip = "When enabled, the UI will start hidden on future sessions. Toggle with your keybind.",
+					Icon = 87575513726659,
+					IgnoreConfig = true,
+					Callback = function(v)
+						WindowSettings.HiddenFromStart = v
+						-- Save to file if possible
+						if not isStudio and writefile then
+							pcall(function()
+								if not isfolder(Starlight.FileSystem.Folder) then
+									makefolder(Starlight.FileSystem.Folder)
+								end
+								writefile(Starlight.FileSystem.Folder .. "/ui_hidden_from_start.txt", tostring(v))
+							end)
+						end
+						Starlight:Notification({
+							Title = "Setting Updated",
+							Icon = 6026568227,
+							Content = v and "UI will start hidden on next session." or "UI will be visible on start.",
+							Duration = 2,
+						})
+					end,
+				}, "hiddenfromstart")
 
 				instance:CreateDivider()
 
