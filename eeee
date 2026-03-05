@@ -1046,27 +1046,75 @@ local ConfigMethods = {
 	end,
 }
 
+-- PERF: Registry-based theme binding. Instead of creating a new themeEvent:Connect()
+-- per bindTheme call (which creates hundreds of connections), we store all bindings
+-- in a flat array and iterate it once from a single themeEvent connection.
+-- Also caches split key paths so we don't call string.gmatch on every theme update.
+local _themeBindings = {} -- {object, property, keys (pre-split), isGradient}
+local _themeKeyCache = {} -- "Backgrounds.Dark" -> {"Backgrounds", "Dark"}
+
+local function _getCachedKeys(themeKey)
+	local cached = _themeKeyCache[themeKey]
+	if cached then return cached end
+	local keys = {}
+	for segment in string.gmatch(themeKey, "[^%.]+") do
+		keys[#keys + 1] = segment
+	end
+	_themeKeyCache[themeKey] = keys
+	return keys
+end
+
+local function _resolveThemeValue(keys)
+	local current = Starlight.CurrentTheme
+	for i = 1, #keys do
+		if typeof(current) ~= "table" then return nil end
+		current = current[keys[i]]
+	end
+	return current
+end
+
+local function _applyThemeBinding(binding)
+	local ok, _ = pcall(function()
+		local value = _resolveThemeValue(binding[3])
+		if binding[4] and typeof(value) == "Color3" then
+			binding[1][binding[2]] = ColorSequence.new({
+				ColorSequenceKeypoint.new(0, value),
+				ColorSequenceKeypoint.new(1, value),
+			})
+		else
+			binding[1][binding[2]] = value
+		end
+	end)
+end
+
+local _themeConnectionReady = false
+local function _ensureThemeConnection()
+	if _themeConnectionReady then return end
+	_themeConnectionReady = true
+	themeEvent.Event:Connect(function()
+		for i = #_themeBindings, 1, -1 do
+			local binding = _themeBindings[i]
+			-- Clean up destroyed objects
+			local ok, exists = pcall(function() return binding[1].Parent end)
+			if not ok then
+				table.remove(_themeBindings, i)
+			else
+				_applyThemeBinding(binding)
+			end
+		end
+	end)
+end
+
 local ThemeMethods = {
 	bindTheme = function(object: GuiObject, property, themeKey)
-		local function set()
-			pcall(task.spawn, function()
-				if
-					object.ClassName == "UIGradient"
-					and typeof(GetNestedValue(Starlight.CurrentTheme, themeKey)) == "Color3"
-				then
-					object[property] = ColorSequence.new({
-						ColorSequenceKeypoint.new(0, GetNestedValue(Starlight.CurrentTheme, themeKey)),
-						ColorSequenceKeypoint.new(1, GetNestedValue(Starlight.CurrentTheme, themeKey)),
-					})
-					return
-				end
-
-				object[property] = GetNestedValue(Starlight.CurrentTheme, themeKey)
-			end)
-		end
-
-		themeEvent.Event:Connect(set)
-		set()
+		_ensureThemeConnection()
+		local keys = _getCachedKeys(themeKey)
+		local isGradient = false
+		pcall(function() isGradient = object.ClassName == "UIGradient" end)
+		local binding = {object, property, keys, isGradient}
+		_themeBindings[#_themeBindings + 1] = binding
+		-- Apply immediately
+		_applyThemeBinding(binding)
 	end,
 	encodeTheme = function(theme)
 		local function serialize(data)
@@ -1402,32 +1450,50 @@ local oldSizeX, oldSizeY, oldPosX, oldPosY
 local function Hide(Interface, JustHide: boolean?, Notify: boolean?, Bind: string?)
 	JustHide = JustHide or false
 
-	-- Close any open dropdown before hiding the UI so it doesn't remain visible
+	-- Close any open nested dropdown before hiding so it doesn't stay visible
 	if Starlight.OpenDropdown then
 		pcall(function()
-			local dd = Starlight.OpenDropdown
-			if dd.Instances and dd.Instances[2] then
-				dd.Instances[2].Visible = false
-				dd.Instances[2].Size = UDim2.fromOffset(dd.Instances[2].Size.X.Offset, 0)
-				dd.Instances[2].List.Size = UDim2.new(1, 0, 0, 0)
-				if acrylicFlag and dd.AcrylicObject and dd.AcrylicObject.Model then
-					dd.AcrylicObject.Model.Transparency = 1
+			if Starlight.OpenDropdown.Instances and Starlight.OpenDropdown.Instances[2] then
+				Starlight.OpenDropdown.Instances[2].Visible = false
+				if Starlight.OpenDropdown.Instances[2]:FindFirstChild("List") then
+					Starlight.OpenDropdown.Instances[2].List.Size = UDim2.new(1, 0, 0, 0)
+				end
+				Starlight.OpenDropdown.Instances[2].Size = UDim2.fromOffset(
+					Starlight.OpenDropdown.Instances[2].Size.X.Offset, 0
+				)
+				if acrylicFlag and Starlight.OpenDropdown.AcrylicObject and Starlight.OpenDropdown.AcrylicObject.Model then
+					Starlight.OpenDropdown.AcrylicObject.Model.Transparency = 1
 				end
 			end
 		end)
 		Starlight.OpenDropdown = nil
 	end
 
-	-- Close any open color picker before hiding
-	if Starlight.OpenColorPicker then
-		pcall(function()
-			local cp = Starlight.OpenColorPicker
-			if cp.Instances and cp.Instances[2] then
-				cp.Instances[2].Visible = false
+	-- Close standalone dropdown popup overlay
+	pcall(function()
+		if Starlight.Instance and Starlight.Instance.MainWindow then
+			local popupOverlay = Starlight.Instance.MainWindow:FindFirstChild("Popup Overlay")
+			if popupOverlay then
+				popupOverlay.Visible = false
+				for _, child in pairs(popupOverlay:GetChildren()) do
+					if child:IsA("GuiObject") then
+						child.Visible = false
+					end
+				end
 			end
-		end)
-		Starlight.OpenColorPicker = nil
-	end
+		end
+	end)
+
+	-- Close nested dropdown popup overlay
+	pcall(function()
+		if Starlight.Instance and Starlight.Instance:FindFirstChild("PopupOverlay") then
+			for _, child in pairs(Starlight.Instance.PopupOverlay:GetChildren()) do
+				if child:IsA("GuiObject") then
+					child.Visible = false
+				end
+			end
+		end
+	end)
 
 	-- Simply disable the interface instead of animating transparency
 	if Interface.ClassName == "ScreenGui" then
@@ -1895,17 +1961,6 @@ local ResizePos = false -- Not Implemented as of Alpha Release 2
 
 local GUICanvasSize = { X = Camera.ViewportSize.X, Y = Camera.ViewportSize.Y - GuiInset }
 
---// SUBSECTION : Interface Variables
-
-local mainWindow: Frame = StarlightUI.MainWindow
-local Resources = StarlightUI.Resources
-local navigation: Frame = mainWindow.Sidebar.Navigation
-local tabs: Frame = mainWindow.Content.ContentMain.Elements
-local Resizing = false -- Not Implemented as of Alpha Release 2
-local ResizePos = false -- Not Implemented as of Alpha Release 2
-
-local GUICanvasSize = { X = Camera.ViewportSize.X, Y = Camera.ViewportSize.Y - GuiInset }
-
 --// ENDSUBSECTION
 
 if UserInputService.TouchEnabled then
@@ -2288,8 +2343,6 @@ function Starlight:CreateWindow(WindowSettings)
 			RememberJoins = bool, ****
 			Link = string ****
 		},
-		
-		HiddenFromStart = bool, ** -- If true, the UI starts hidden and must be toggled open with the keybind
 	}
 	
 	]]
@@ -2363,19 +2416,6 @@ function Starlight:CreateWindow(WindowSettings)
 	            end
 	        end)
 	    end
-
-	    -- Load saved HiddenFromStart setting
-	    local hiddenPath = Starlight.FileSystem.Folder .. "/ui_hidden_from_start.txt"
-	    if isfile(hiddenPath) then
-	        pcall(function()
-	            local savedVal = readfile(hiddenPath)
-	            if savedVal == "true" then
-	                WindowSettings.HiddenFromStart = true
-	            elseif savedVal == "false" then
-	                WindowSettings.HiddenFromStart = false
-	            end
-	        end)
-	    end
 	end
 
 	Starlight.Window = {
@@ -2387,6 +2427,19 @@ function Starlight:CreateWindow(WindowSettings)
 
 		Values = WindowSettings,
 	}
+
+	-- PERF: Element creation batch yielding system.
+	-- Every N elements created, we yield one frame to prevent the game from freezing
+	-- when scripts create 50-100+ UI elements in a burst.
+	local _elementCreateCount = 0
+	local _YIELD_EVERY = 6 -- yield every N elements to spread load across frames
+	local function _elementCreated()
+		_elementCreateCount = _elementCreateCount + 1
+		if _elementCreateCount >= _YIELD_EVERY then
+			_elementCreateCount = 0
+			task.wait()
+		end
+	end
 
 	--// SUBSECTION : Initial Code
 	do
@@ -2495,26 +2548,29 @@ function Starlight:CreateWindow(WindowSettings)
 		--mainWindow.Sidebar.Player.subheader.Text = Player.Name
 		mainWindow.Sidebar.Player.Visible = false
 
-		ContentProvider:PreloadAsync({
-			"rbxassetid://116767744785553", -- cursor
-			"rbxassetid://90155503712202", -- cursor shadow
-			"rbxassetid://18824089198", -- player blurred
-			"rbxassetid://129398364168201", -- warning
-			"rbxassetid://3926305904", -- dropdown arrows
-			"rbxassetid://108613279334326", -- linking colorpicker
-			"rbxassetid://6031625148", -- rainbow colorpicker
-			"rbxassetid://4155801252", -- color picker
-			"rbxassetid://16423157073", -- close
-			"rbxassetid://123097456061373", -- minimise
-			"rbxassetid://114684871091583", -- maximise
-			"rbxassetid://6034304908", -- notification
-			"rbxassetid://8445471332", -- search
-			"rbxassetid://92421933997743", -- Corner Repair
-			"rbxassetid://80990588449079", -- loading circle
-		}, function(asset)
-			if debugV then
-				print(`loaded asset {asset}`)
-			end
+		-- PERF: Preload assets in background thread so it doesn't block UI creation
+		task.spawn(function()
+			ContentProvider:PreloadAsync({
+				"rbxassetid://116767744785553", -- cursor
+				"rbxassetid://90155503712202", -- cursor shadow
+				"rbxassetid://18824089198", -- player blurred
+				"rbxassetid://129398364168201", -- warning
+				"rbxassetid://3926305904", -- dropdown arrows
+				"rbxassetid://108613279334326", -- linking colorpicker
+				"rbxassetid://6031625148", -- rainbow colorpicker
+				"rbxassetid://4155801252", -- color picker
+				"rbxassetid://16423157073", -- close
+				"rbxassetid://123097456061373", -- minimise
+				"rbxassetid://114684871091583", -- maximise
+				"rbxassetid://6034304908", -- notification
+				"rbxassetid://8445471332", -- search
+				"rbxassetid://92421933997743", -- Corner Repair
+				"rbxassetid://80990588449079", -- loading circle
+			}, function(asset)
+				if debugV then
+					print(`loaded asset {asset}`)
+				end
+			end)
 		end)
 
 		-- Theme Binding
@@ -2780,8 +2836,19 @@ function Starlight:CreateWindow(WindowSettings)
 			StarlightUI.Drag.Visible = true
 			StarlightUI.MobileToggle.Visible = UserInputService.TouchEnabled
 
-			-- Hide UI from start if WindowSettings.HiddenFromStart is true
-			if WindowSettings.HiddenFromStart then
+			-- Apply "Hide UI On Start" preference
+			local shouldHideFromStart = WindowSettings.HiddenFromStart or false
+			if not isStudio then
+				pcall(function()
+					if isfile and isfile(Starlight.FileSystem.Folder .. "/ui_hidden_from_start.txt") then
+						local saved = readfile(Starlight.FileSystem.Folder .. "/ui_hidden_from_start.txt")
+						if saved == "true" then
+							shouldHideFromStart = true
+						end
+					end
+				end)
+			end
+			if shouldHideFromStart then
 				task.delay(0.1, function()
 					Hide(mainWindow, false, true, Starlight.WindowKeybind)
 					Hide(StarlightUI.Drag, false, false, Starlight.WindowKeybind)
@@ -4598,16 +4665,25 @@ function Starlight:CreateWindow(WindowSettings)
 
 
 					--// Interaction System \\--
+					-- PERF: Track the dismiss connection so we don't leak one per click
+					local _dropdownDismissConn = nil
 					Element.Instances.Element.Icon.MouseButton1Click:Connect(function()
 						mainWindow["Popup Overlay"].Visible = true
 						Element.Instances.Popup.Visible = true
 
-						UserInputService.InputBegan:Connect(function(i, g)
+						if _dropdownDismissConn then
+							_dropdownDismissConn:Disconnect()
+						end
+						_dropdownDismissConn = UserInputService.InputBegan:Connect(function(i, g)
 							if g or i.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
 							local p, pos, size = i.Position, Element.Instances.Popup.AbsolutePosition, Element.Instances.Popup.AbsoluteSize
 							if not (p.X >= pos.X and p.X <= pos.X + size.X and p.Y >= pos.Y and p.Y <= pos.Y + size.Y) then
 								mainWindow["Popup Overlay"].Visible = false
 								Element.Instances.Popup.Visible = false
+								if _dropdownDismissConn then
+									_dropdownDismissConn:Disconnect()
+									_dropdownDismissConn = nil
+								end
 							end
 						end)
 					end)
@@ -4753,6 +4829,68 @@ function Starlight:CreateWindow(WindowSettings)
 
 					function Element:Destroy()
 						Element.Instance:Destroy()
+						pcall(function() Element.Instances.Popup:Destroy() end)
+					end
+
+					function Element:Set(NewSettings)
+						for i, v in pairs(ElementSettings) do
+							if NewSettings[i] == nil then
+								NewSettings[i] = v
+							end
+						end
+						ElementSettings = NewSettings
+						Element.Values = ElementSettings
+
+						if ElementSettings.CurrentOption then
+							if type(ElementSettings.CurrentOption) == "string" then
+								ElementSettings.CurrentOption = {ElementSettings.CurrentOption}
+							end
+							if not ElementSettings.MultipleOptions and type(ElementSettings.CurrentOption) == "table" then
+								ElementSettings.CurrentOption = {ElementSettings.CurrentOption[1]}
+							end
+						else
+							ElementSettings.CurrentOption = {}
+						end
+
+						-- Clear old option instances
+						for _, child in pairs(Element.Instances.Popup.Content:GetChildren()) do
+							if child.ClassName == "Frame" and not string.find(child.Name, "Option_Template") and not string.find(child.Name, "Option_TEMPLATE") then
+								child:Destroy()
+							end
+						end
+
+						Refresh()
+
+						-- Re-apply selection visuals
+						if ElementSettings.CurrentOption and #ElementSettings.CurrentOption > 0 then
+							if not ElementSettings.MultipleOptions then
+								pcall(function() ActivateColorSingle(ElementSettings.CurrentOption[1]) end)
+							else
+								for _, v in pairs(ElementSettings.CurrentOption) do
+									pcall(function()
+										Tween(Element.Instances.Popup.Content[v], {BackgroundTransparency = 0.8})
+										Tween(Element.Instances.Popup.Content[v].Header, {TextColor3 = Color3.fromRGB(255,255,255)})
+										Element.Instances.Popup.Content[v].Header.Accent.Enabled = true
+										Element.Instances.Popup.Content[v].Icon.Accent.Enabled = true
+									end)
+								end
+							end
+						end
+
+						local Selected, ind = nil, 0
+						for i,v in pairs(ElementSettings.CurrentOption) do ind = ind + 1 end
+						if ind == 1 then Selected = ElementSettings.CurrentOption[1] else Selected = ElementSettings.CurrentOption end
+						CB(Selected)
+					end
+
+					function Element:UpdateOptions(newOptions, newCurrentOption)
+						ElementSettings.Options = newOptions
+						if newCurrentOption ~= nil then
+							ElementSettings.CurrentOption = type(newCurrentOption) == "string" and {newCurrentOption} or newCurrentOption
+						else
+							ElementSettings.CurrentOption = {}
+						end
+						Element:Set(ElementSettings)
 					end
 
 					Starlight.Window.TabSections[Name].Tabs[TabIndex].Groupboxes[GroupIndex].Elements[ElementSettings.Name] = Element
@@ -5243,6 +5381,7 @@ function Starlight:CreateWindow(WindowSettings)
 						end
 					end)
 
+					_elementCreated()
 					Starlight.Window.TabSections[Name].Tabs[TabIndex].Groupboxes[GroupIndex].Elements["BUTTON_" .. Index] =
 						Element
 					return Starlight.Window.TabSections[Name].Tabs[TabIndex].Groupboxes[GroupIndex].Elements["BUTTON_" .. Index]
@@ -5275,10 +5414,13 @@ function Starlight:CreateWindow(WindowSettings)
 					local Instances
 
 					task.spawn(function()
-						Instances = {
-							Style1 = GroupboxTemplateInstance["Checkbox_TEMPLATE_Disabled"]:Clone(),
-							Style2 = GroupboxTemplateInstance["Switch_TEMPLATE_Disabled"]:Clone(),
-						}
+						-- PERF: Only clone the style that is actually used, not both
+						Instances = {}
+						if ElementSettings.Style == 2 then
+							Instances.Style2 = GroupboxTemplateInstance["Switch_TEMPLATE_Disabled"]:Clone()
+						else
+							Instances.Style1 = GroupboxTemplateInstance["Checkbox_TEMPLATE_Disabled"]:Clone()
+						end
 
 						local function checkForBind()
 							for i, v in pairs(Element.NestedElements) do
@@ -5294,43 +5436,51 @@ function Starlight:CreateWindow(WindowSettings)
 
 						local function Set(bool)
 							if bool then
-								Tween(Instances.Style1.Checkbox, { BackgroundTransparency = 0 })
-								Tween(Instances.Style1.Checkbox.Icon, { ImageTransparency = 0 })
-								Tween(
-									Instances.Style2.Switch,
-									{ BackgroundTransparency = 0, BackgroundColor3 = Color3.fromRGB(255, 255, 255) }
-								)
-								Tween(
-									Instances.Style2.Switch.Knob,
-									{
-										Position = UDim2.new(0, 20, 0.5, 0),
-										BackgroundColor3 = Starlight.CurrentTheme.Foregrounds.Active,
-										BackgroundTransparency = 0,
-									}
-								)
-								Tween(Instances.Style2.Switch.UIStroke, { Color = Color3.fromRGB(255, 255, 255) })
-								Tween(Instances.Style2.Switch.DropShadowHolder.DropShadow, { ImageTransparency = 0 })
-								Instances.Style2.Switch.Accent.Enabled = true
-								Instances.Style2.Switch.UIStroke.Accent.Enabled = true
+								if Instances.Style1 then
+									Tween(Instances.Style1.Checkbox, { BackgroundTransparency = 0 })
+									Tween(Instances.Style1.Checkbox.Icon, { ImageTransparency = 0 })
+								end
+								if Instances.Style2 then
+									Tween(
+										Instances.Style2.Switch,
+										{ BackgroundTransparency = 0, BackgroundColor3 = Color3.fromRGB(255, 255, 255) }
+									)
+									Tween(
+										Instances.Style2.Switch.Knob,
+										{
+											Position = UDim2.new(0, 20, 0.5, 0),
+											BackgroundColor3 = Starlight.CurrentTheme.Foregrounds.Active,
+											BackgroundTransparency = 0,
+										}
+									)
+									Tween(Instances.Style2.Switch.UIStroke, { Color = Color3.fromRGB(255, 255, 255) })
+									Tween(Instances.Style2.Switch.DropShadowHolder.DropShadow, { ImageTransparency = 0 })
+									Instances.Style2.Switch.Accent.Enabled = true
+									Instances.Style2.Switch.UIStroke.Accent.Enabled = true
+								end
 							else
-								Tween(Instances.Style1.Checkbox, { BackgroundTransparency = 0.9 })
-								Tween(Instances.Style1.Checkbox.Icon, { ImageTransparency = 1 })
-								Tween(
-									Instances.Style2.Switch,
-									{ BackgroundTransparency = 1, BackgroundColor3 = knobcolor }
-								)
-								Tween(
-									Instances.Style2.Switch.Knob,
-									{
-										Position = UDim2.new(0, 0, 0.5, 0),
-										BackgroundColor3 = knobcolor,
-										BackgroundTransparency = 0.5,
-									}
-								)
-								Tween(Instances.Style2.Switch.UIStroke, { Color = knobcolor })
-								Tween(Instances.Style2.Switch.DropShadowHolder.DropShadow, { ImageTransparency = 1 })
-								Instances.Style2.Switch.Accent.Enabled = false
-								Instances.Style2.Switch.UIStroke.Accent.Enabled = false
+								if Instances.Style1 then
+									Tween(Instances.Style1.Checkbox, { BackgroundTransparency = 0.9 })
+									Tween(Instances.Style1.Checkbox.Icon, { ImageTransparency = 1 })
+								end
+								if Instances.Style2 then
+									Tween(
+										Instances.Style2.Switch,
+										{ BackgroundTransparency = 1, BackgroundColor3 = knobcolor }
+									)
+									Tween(
+										Instances.Style2.Switch.Knob,
+										{
+											Position = UDim2.new(0, 0, 0.5, 0),
+											BackgroundColor3 = knobcolor,
+											BackgroundTransparency = 0.5,
+										}
+									)
+									Tween(Instances.Style2.Switch.UIStroke, { Color = knobcolor })
+									Tween(Instances.Style2.Switch.DropShadowHolder.DropShadow, { ImageTransparency = 1 })
+									Instances.Style2.Switch.Accent.Enabled = false
+									Instances.Style2.Switch.UIStroke.Accent.Enabled = false
+								end
 							end
 
 							Element.Values.CurrentValue = bool
@@ -5564,6 +5714,25 @@ function Starlight:CreateWindow(WindowSettings)
 							Index = NewIndex
 							Element.Values = ElementSettings
 
+							-- PERF: Lazy-clone the other style if a style switch is requested
+							if Element.Values.Style == 2 and not Instances.Style2 then
+								Instances.Style2 = GroupboxTemplateInstance["Switch_TEMPLATE_Disabled"]:Clone()
+								Instances.Style2.Parent = Groupbox.ParentingItem
+								ThemeMethods.bindTheme(Instances.Style2.Header, "TextColor3", "Foregrounds.Light")
+								ThemeMethods.bindTheme(Instances.Style2.Header.Icon, "ImageColor3", "Foregrounds.Light")
+								ThemeMethods.bindTheme(Instances.Style2.Switch.Accent, "Color", "Accents.Main")
+								ThemeMethods.bindTheme(Instances.Style2.Switch.UIStroke.Accent, "Color", "Accents.Main")
+								tooltips["Style2"] = AddToolTip(Element.Values.Tooltip or "", Instances.Style2)
+							elseif Element.Values.Style == 1 and not Instances.Style1 then
+								Instances.Style1 = GroupboxTemplateInstance["Checkbox_TEMPLATE_Disabled"]:Clone()
+								Instances.Style1.Parent = Groupbox.ParentingItem
+								ThemeMethods.bindTheme(Instances.Style1.Header, "TextColor3", "Foregrounds.Light")
+								ThemeMethods.bindTheme(Instances.Style1.Header.Icon, "ImageColor3", "Foregrounds.Light")
+								ThemeMethods.bindTheme(Instances.Style1.Checkbox.Accent, "Color", "Accents.Main")
+								ThemeMethods.bindTheme(Instances.Style1.Checkbox.AccentBrighter, "Color", "Accents.Brighter")
+								tooltips["Style1"] = AddToolTip(Element.Values.Tooltip or "", Instances.Style1)
+							end
+
 							Set(Element.Values.CurrentValue)
 							local Success, Response = pcall(function()
 								Element.Values.Callback(Element.Values.CurrentValue)
@@ -5723,9 +5892,6 @@ function Starlight:CreateWindow(WindowSettings)
 						function module:Set(NewNestedSettings, NewNestedIndex)
 							NestedElement:Set(NewNestedSettings, NewNestedIndex)
 						end
-						function module:Update(NewOptions)
-							NestedElement:Update(NewOptions)
-						end
 						function module:Destroy()
 							NestedElement:Destroy()
 						end
@@ -5737,6 +5903,7 @@ function Starlight:CreateWindow(WindowSettings)
 					end
 
 					Starlight.Window.TabSections[Name].Tabs[TabIndex].Groupboxes[GroupIndex].Elements[Index] = Element
+					_elementCreated()
 					return Starlight.Window.TabSections[Name].Tabs[TabIndex].Groupboxes[GroupIndex].Elements[Index]
 				end
 
@@ -6205,6 +6372,7 @@ function Starlight:CreateWindow(WindowSettings)
 					end)
 
 					Starlight.Window.TabSections[Name].Tabs[TabIndex].Groupboxes[GroupIndex].Elements[Index] = Element
+					_elementCreated()
 					return Starlight.Window.TabSections[Name].Tabs[TabIndex].Groupboxes[GroupIndex].Elements[Index]
 				end
 
@@ -6491,6 +6659,7 @@ function Starlight:CreateWindow(WindowSettings)
 					Element.Instance.Parent = Groupbox.ParentingItem
 
 					Starlight.Window.TabSections[Name].Tabs[TabIndex].Groupboxes[GroupIndex].Elements[Index] = Element
+					_elementCreated()
 					return Starlight.Window.TabSections[Name].Tabs[TabIndex].Groupboxes[GroupIndex].Elements[Index]
 				end
 
@@ -7080,6 +7249,16 @@ function Starlight:CreateWindow(WindowSettings)
 
 								Starlight.Window.TabSections[Name].Tabs[TabIndex].Groupboxes[GroupIndex].Elements[ParentIndex].NestedElements[NestedIndex].Values =
 									NestedElement.Values
+							end
+
+							function NestedElement:UpdateOptions(newOptions, newCurrentOption)
+								NestedElement.Values.Options = newOptions
+								if newCurrentOption ~= nil then
+									NestedElement.Values.CurrentOption = typeof(newCurrentOption) == "string" and {newCurrentOption} or newCurrentOption
+								else
+									NestedElement.Values.CurrentOption = {}
+								end
+								NestedElement:Set(NestedElement.Values)
 							end
 						end)
 
@@ -8565,31 +8744,6 @@ function Starlight:CreateWindow(WindowSettings)
 								NestedElement = nil
 							end
 
-							-- Update refreshes the dropdown options list without changing settings.
-							-- Useful for dynamic lists (e.g. player lists) that need manual refresh.
-							function NestedElement:Update(NewOptions)
-								if NewOptions then
-									NestedElement.Values.Options = NewOptions
-								end
-								Refresh()
-								-- Re-activate any currently selected options that still exist
-								local preoptions = table.clone(NestedElement.Values.CurrentOption or {})
-								NestedElement.Values.CurrentOption = {}
-								task.delay(1 / 60, function()
-									for _, v in pairs(preoptions) do
-										for _, optioninstance in pairs(NestedElement.Instances[2].List:GetChildren()) do
-											if optioninstance.Name == "OPTION_" .. v then
-												ToggleOption(optioninstance)
-											end
-										end
-									end
-									NestedElement.Instances[1].Header.Text =
-										Table.Unpack(NestedElement.Values.CurrentOption)
-									NestedElement.Instances[1].Header.PlaceholderText = NestedElement.Values.Placeholder
-										or "--"
-								end)
-							end
-
 							function NestedElement:Set(NewNestedSettings, NewNestedIndex)
 								NewNestedIndex = NewNestedIndex or NestedIndex
 
@@ -8652,6 +8806,16 @@ function Starlight:CreateWindow(WindowSettings)
 								Starlight.Window.TabSections[Name].Tabs[TabIndex].Groupboxes[GroupIndex].Elements[ParentIndex].NestedElements[NestedIndex].Values =
 									NestedElement.Values
 							end
+
+							function NestedElement:UpdateOptions(newOptions, newCurrentOption)
+								NestedElement.Values.Options = newOptions
+								if newCurrentOption ~= nil then
+									NestedElement.Values.CurrentOption = typeof(newCurrentOption) == "string" and {newCurrentOption} or newCurrentOption
+								else
+									NestedElement.Values.CurrentOption = {}
+								end
+								NestedElement:Set(NestedElement.Values)
+							end
 						end)
 
 						Starlight.Window.TabSections[Name].Tabs[TabIndex].Groupboxes[GroupIndex].Elements[ParentIndex].NestedElements[NestedIndex] =
@@ -8662,6 +8826,7 @@ function Starlight:CreateWindow(WindowSettings)
 					--// ENDSUBSECTION
 
 					Starlight.Window.TabSections[Name].Tabs[TabIndex].Groupboxes[GroupIndex].Elements[Index] = Element
+					_elementCreated()
 					return Starlight.Window.TabSections[Name].Tabs[TabIndex].Groupboxes[GroupIndex].Elements[Index]
 				end
 
@@ -8760,6 +8925,7 @@ function Starlight:CreateWindow(WindowSettings)
 					end)
 
 					Starlight.Window.TabSections[Name].Tabs[TabIndex].Groupboxes[GroupIndex].Elements[Index] = Element
+					_elementCreated()
 					return Starlight.Window.TabSections[Name].Tabs[TabIndex].Groupboxes[GroupIndex].Elements[Index]
 				end
 
@@ -8917,15 +9083,29 @@ function Starlight:CreateWindow(WindowSettings)
 					end,
 				}, "notitficationacrylic")
 
+				instance:CreateDivider()
+
+				local hiddenFromStartSaved = WindowSettings.HiddenFromStart or false
+				if not isStudio then
+					pcall(function()
+						if isfile and isfile(Starlight.FileSystem.Folder .. "/ui_hidden_from_start.txt") then
+							local saved = readfile(Starlight.FileSystem.Folder .. "/ui_hidden_from_start.txt")
+							if saved == "true" then
+								hiddenFromStartSaved = true
+							end
+						end
+					end)
+				end
+
 				instance:CreateToggle({
-					Name = "Hidden From Start",
-					CurrentValue = WindowSettings.HiddenFromStart or false,
-					Tooltip = "When enabled, the UI will start hidden on future sessions. Toggle with your keybind.",
+					Name = "Hide UI On Start",
+					CurrentValue = hiddenFromStartSaved,
+					Tooltip = "When enabled, the UI will be hidden when the script loads. Press the keybind to show it.",
 					Icon = 87575513726659,
 					IgnoreConfig = true,
 					Callback = function(v)
 						WindowSettings.HiddenFromStart = v
-						-- Save to file if possible
+						-- Save preference to file
 						if not isStudio and writefile then
 							pcall(function()
 								if not isfolder(Starlight.FileSystem.Folder) then
@@ -8934,14 +9114,8 @@ function Starlight:CreateWindow(WindowSettings)
 								writefile(Starlight.FileSystem.Folder .. "/ui_hidden_from_start.txt", tostring(v))
 							end)
 						end
-						Starlight:Notification({
-							Title = "Setting Updated",
-							Icon = 6026568227,
-							Content = v and "UI will start hidden on next session." or "UI will be visible on start.",
-							Duration = 2,
-						})
 					end,
-				}, "hiddenfromstart")
+				}, "hiddenFromStart")
 
 				instance:CreateDivider()
 
